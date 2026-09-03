@@ -44,3 +44,39 @@ export interface MazeContext {
  * covers both and the algorithms need no animation-specific branches.
  */
 export type MazeAlgorithm = (ctx: MazeContext, rng: () => number) => Generator<void, void, void>
+
+/**
+ * Per-cell progress of a solver. Kept apart from the generation state above so
+ * the two layers can be drawn on top of each other without their colours
+ * meaning two different things.
+ */
+export const UNSEEN = 0
+/** Discovered, but not expanded yet */
+export const FRINGE = 1
+/** Expanded: every neighbour of this cell has been looked at */
+export const SEARCHED = 2
+
+export interface SolveContext {
+  readonly grid: Grid
+  /** Cell index -> UNSEEN | FRINGE | SEARCHED */
+  readonly state: Uint8Array
+  readonly start: number
+  readonly goal: number
+  /**
+   * The route being followed, from start to the head, as cell indices.
+   * Once the goal is reached this is the finished route.
+   */
+  path: number[]
+  /** Cells this step is looking at. The renderer highlights them. */
+  active: number[]
+  /** How many cells have been expanded. This is what the search actually cost. */
+  expanded: number
+  found: boolean
+}
+
+/**
+ * Same shape as MazeAlgorithm: mutate ctx in place, yield once per step.
+ * No rng, so re-solving the same maze twice always looks the same and the
+ * algorithms can be compared side by side.
+ */
+export type SolveAlgorithm = (ctx: SolveContext) => Generator<void, void, void>

@@ -2,9 +2,11 @@
   import { onMount } from 'svelte'
   import MazeCanvas from './lib/MazeCanvas.svelte'
   import { algorithms, getAlgorithm } from './lib/maze/algorithms'
-  import { createContext } from './lib/maze/grid'
+  import { createContext, createSolveContext } from './lib/maze/grid'
   import { PALETTE } from './lib/maze/renderer'
   import { createRng, randomSeed } from './lib/maze/rng'
+  import { getSolver, solvers } from './lib/maze/solvers'
+  import type { SolveContext } from './lib/maze/types'
 
   type RunState = 'idle' | 'running' | 'paused' | 'done'
 
@@ -15,14 +17,27 @@
     done: '完成',
   }
 
-  const LEGEND = [
+  const SOLVE_STATUS_LABEL: Record<RunState, string> = {
+    idle: '未探索',
+    running: '探索中',
+    paused: '一時停止',
+    done: '到達',
+  }
+
+  const LEGEND_GENERATE = [
     { color: PALETTE.rock, label: '未踏' },
     { color: PALETTE.frontier, label: '候補' },
     { color: PALETTE.trail, label: '掘削中の経路' },
     { color: PALETTE.corridor, label: '確定した通路' },
-    { color: PALETTE.active, label: '注目セル' },
     { color: PALETTE.start, label: 'スタート (S)' },
     { color: PALETTE.goal, label: 'ゴール (G)' },
+  ]
+
+  const LEGEND_SOLVE = [
+    { color: PALETTE.searched, label: '探索済み' },
+    { color: PALETTE.fringe, label: 'フロンティア' },
+    { color: PALETTE.route, label: '経路' },
+    { color: PALETTE.active, label: '注目セル' },
   ]
 
   const INITIAL_COLS = 28
@@ -32,25 +47,48 @@
   let rows = $state(INITIAL_ROWS)
   let algorithmId = $state(algorithms[0].id)
   let stepsPerFrame = $state(6)
+  let solverId = $state(solvers[0].id)
+  let solveStepsPerFrame = $state(4)
 
   let runState = $state<RunState>('idle')
   let steps = $state(0)
   // Mutated in place, so $state.raw: only rebuilding it needs to trigger a redraw.
   let maze = $state.raw(createContext(INITIAL_COLS, INITIAL_ROWS))
 
+  let solveState = $state<RunState>('idle')
+  let solveSteps = $state(0)
+  // Same deal as maze. The counters below mirror it, because reading through a
+  // raw state never re-renders on its own.
+  let solve = $state.raw<SolveContext | null>(null)
+  let expanded = $state(0)
+  let routeLength = $state(0)
+
   let view: ReturnType<typeof MazeCanvas> | undefined = $state()
   let generator: Generator<void, void, void> | null = null
+  let solveGenerator: Generator<void, void, void> | null = null
+  // Only one of the two loops ever runs, so a single handle is enough
   let frame = 0
 
   const algorithm = $derived(getAlgorithm(algorithmId))
+  const solver = $derived(getSolver(solverId))
+  const solvable = $derived(runState === 'done')
   const primaryLabel = $derived(
     runState === 'running'
       ? '一時停止'
       : runState === 'paused'
         ? '再開'
         : runState === 'done'
-          ? 'もう一度生成'
+          ? '生成し直す'
           : '生成する',
+  )
+  const solveLabel = $derived(
+    solveState === 'running'
+      ? '一時停止'
+      : solveState === 'paused'
+        ? '再開'
+        : solveState === 'done'
+          ? '解き直す'
+          : '解く',
   )
 
   function reset(): void {
@@ -59,6 +97,7 @@
     runState = 'idle'
     steps = 0
     maze = createContext(cols, rows)
+    clearSolve()
   }
 
   function ensureGenerator(): void {
@@ -108,6 +147,89 @@
     view?.redraw()
   }
 
+  function clearSolve(): void {
+    cancelAnimationFrame(frame)
+    solveGenerator = null
+    solveState = 'idle'
+    solveSteps = 0
+    solve = null
+    expanded = 0
+    routeLength = 0
+  }
+
+  function ensureSolver(): void {
+    if (solveState === 'done') clearSolve()
+    if (!solveGenerator) {
+      solve = createSolveContext(maze)
+      solveGenerator = solver.run(solve)
+    }
+  }
+
+  /** Advance one step. Returns true once the search has finished. */
+  function advanceSolve(): boolean {
+    if (!solveGenerator) return true
+    if (solveGenerator.next().done) {
+      solveGenerator = null
+      solveState = 'done'
+      return true
+    }
+    solveSteps++
+    return false
+  }
+
+  /** Copy the counters out of the raw context so the panel follows along. */
+  function syncSolveStats(): void {
+    expanded = solve?.expanded ?? 0
+    routeLength = solve?.path.length ?? 0
+  }
+
+  function solveLoop(): void {
+    for (let i = 0; i < solveStepsPerFrame; i++) {
+      if (advanceSolve()) break
+    }
+    syncSolveStats()
+    view?.redraw()
+    if (solveState === 'running') frame = requestAnimationFrame(solveLoop)
+  }
+
+  function startSolve(): void {
+    if (!solvable) return
+    ensureSolver()
+    solveState = 'running'
+    cancelAnimationFrame(frame)
+    frame = requestAnimationFrame(solveLoop)
+  }
+
+  function pauseSolve(): void {
+    cancelAnimationFrame(frame)
+    solveState = 'paused'
+  }
+
+  /** Run the rest of the search in one go */
+  function completeSolve(): void {
+    if (!solvable) return
+    cancelAnimationFrame(frame)
+    ensureSolver()
+    while (!advanceSolve()) {
+      // until the goal is reached
+    }
+    syncSolveStats()
+    view?.redraw()
+  }
+
+  function toggleSolve(): void {
+    if (solveState === 'running') pauseSolve()
+    else startSolve()
+  }
+
+  /** Swap the solver and, if the maze had already been searched, search again. */
+  function reselectSolver(id: string): void {
+    const wasActive = solveState === 'running' || solveState === 'done'
+    solverId = id
+    clearSolve()
+    if (wasActive) startSolve()
+  }
+
   function togglePlay(): void {
     if (runState === 'running') pause()
     else start()
@@ -132,11 +254,11 @@
     <div class="panel-body">
       <header>
         <h1>迷路ジェネレーター</h1>
-        <p class="subtitle">生成アルゴリズムの動きをそのまま眺める</p>
+        <p class="subtitle">迷路を作るところと、解くところを続けて眺める</p>
       </header>
 
       <fieldset>
-        <legend>アルゴリズム</legend>
+        <legend>生成アルゴリズム</legend>
         <div class="algorithms">
           {#each algorithms as entry (entry.id)}
             <label class="algorithm" class:selected={entry.id === algorithmId}>
@@ -152,6 +274,29 @@
             </label>
           {/each}
         </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>探索アルゴリズム</legend>
+        <div class="algorithms">
+          {#each solvers as entry (entry.id)}
+            <label class="algorithm" class:selected={entry.id === solverId}>
+              <input
+                type="radio"
+                name="solver"
+                value={entry.id}
+                checked={entry.id === solverId}
+                onchange={() => reselectSolver(entry.id)}
+              />
+              <span class="algorithm-name">{entry.name}</span>
+              <span class="algorithm-description">{entry.description}</span>
+            </label>
+          {/each}
+        </div>
+        <p class="hint">
+          完全迷路なので 2 点を結ぶ道は 1 本しかなく、どの手法でも同じ経路にたどり着く。差が出るのは
+          <b>そこへ行き着くまでに何セル調べたか</b>。
+        </p>
       </fieldset>
 
       <fieldset>
@@ -181,39 +326,71 @@
       <fieldset>
         <legend>速度</legend>
         <label class="slider">
-          <span class="slider-label">1 フレームあたり <b>{stepsPerFrame}</b> ステップ</span>
+          <span class="slider-label">生成 <b>{stepsPerFrame}</b> ステップ / フレーム</span>
           <input type="range" min="1" max="120" bind:value={stepsPerFrame} />
+        </label>
+        <label class="slider">
+          <span class="slider-label">探索 <b>{solveStepsPerFrame}</b> ステップ / フレーム</span>
+          <input type="range" min="1" max="120" bind:value={solveStepsPerFrame} />
         </label>
       </fieldset>
 
       <dl class="status">
-        <dt>状態</dt>
-        <dd>{STATUS_LABEL[runState]}</dd>
-        <dt>ステップ</dt>
-        <dd>{steps.toLocaleString()}</dd>
-        <dt>セル数</dt>
-        <dd>{(cols * rows).toLocaleString()}</dd>
+        <dt>生成</dt>
+        <dd>{STATUS_LABEL[runState]} / {steps.toLocaleString()} ステップ</dd>
+        <dt>探索</dt>
+        <dd>{SOLVE_STATUS_LABEL[solveState]} / {solveSteps.toLocaleString()} ステップ</dd>
+        <dt>調べたセル</dt>
+        <dd>
+          {expanded.toLocaleString()} / {(cols * rows).toLocaleString()}
+          {#if expanded > 0}<span class="ratio"
+              >({Math.round((expanded / (cols * rows)) * 100)}%)</span
+            >{/if}
+        </dd>
+        <dt>経路の長さ</dt>
+        <dd>{routeLength > 0 ? routeLength.toLocaleString() : '—'}</dd>
       </dl>
 
-      <ul class="legend">
-        {#each LEGEND as item (item.label)}
-          <li>
-            <span class="swatch" style="background: {item.color}"></span>
-            {item.label}
-          </li>
-        {/each}
-      </ul>
+      <div class="legend">
+        <p class="legend-title">生成</p>
+        <ul>
+          {#each LEGEND_GENERATE as item (item.label)}
+            <li>
+              <span class="swatch" style="background: {item.color}"></span>
+              {item.label}
+            </li>
+          {/each}
+        </ul>
+        <p class="legend-title">探索</p>
+        <ul>
+          {#each LEGEND_SOLVE as item (item.label)}
+            <li>
+              <span class="swatch" style="background: {item.color}"></span>
+              {item.label}
+            </li>
+          {/each}
+        </ul>
+      </div>
     </div>
 
     <div class="actions">
-      <button class="primary" onclick={togglePlay}>{primaryLabel}</button>
-      <button onclick={complete} disabled={runState === 'done'}>一気に生成</button>
-      <button onclick={reset} disabled={runState === 'idle'}>リセット</button>
+      <div class="action-row">
+        <button class="primary" onclick={togglePlay}>{primaryLabel}</button>
+        <button onclick={complete} disabled={runState === 'done'}>一気に生成</button>
+        <button onclick={reset} disabled={runState === 'idle'}>リセット</button>
+      </div>
+      <div class="action-row">
+        <button class="primary" onclick={toggleSolve} disabled={!solvable}>{solveLabel}</button>
+        <button onclick={completeSolve} disabled={!solvable || solveState === 'done'}>
+          一気に解く
+        </button>
+        <button onclick={clearSolve} disabled={solveState === 'idle'}>クリア</button>
+      </div>
     </div>
   </aside>
 
   <main class="stage">
-    <MazeCanvas bind:this={view} {maze} />
+    <MazeCanvas bind:this={view} {maze} {solve} />
   </main>
 </div>
 
@@ -342,23 +519,41 @@
     accent-color: var(--accent-strong);
   }
 
+  .hint {
+    margin: 0.7rem 0 0;
+    font-size: 0.72rem;
+    line-height: 1.6;
+    color: var(--muted);
+  }
+
+  .hint b {
+    color: var(--text);
+    font-weight: 600;
+  }
+
   .actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
+    display: grid;
+    gap: 0.45rem;
     padding: 0.9rem 1.25rem 1.1rem;
     border-top: 1px solid var(--border);
   }
 
+  .action-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.4rem;
+  }
+
   button {
-    flex: 1 1 auto;
-    padding: 0.55rem 0.7rem;
+    padding: 0.55rem 0.3rem;
     border: 1px solid var(--border);
     border-radius: 7px;
     background: var(--panel-raised);
     color: var(--text);
     font: inherit;
-    font-size: 0.82rem;
+    /* Small enough that the longest label still fits on one line at 320px */
+    font-size: 0.76rem;
+    white-space: nowrap;
     cursor: pointer;
     transition:
       border-color 0.15s,
@@ -375,7 +570,6 @@
   }
 
   button.primary {
-    flex-basis: 100%;
     border-color: transparent;
     background: var(--accent-strong);
     color: #06121c;
@@ -404,16 +598,37 @@
     font-variant-numeric: tabular-nums;
   }
 
+  .status .ratio {
+    color: var(--muted);
+  }
+
   .legend {
+    padding: 0.9rem 0 0;
+    border-top: 1px solid var(--border);
+    font-size: 0.72rem;
+    color: var(--muted);
+  }
+
+  .legend-title {
+    margin: 0 0 0.4rem;
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  .legend ul {
     display: flex;
     flex-wrap: wrap;
     gap: 0.4rem 0.9rem;
-    margin: 0;
-    padding: 0.9rem 0 0;
-    border-top: 1px solid var(--border);
+    margin: 0 0 0.9rem;
+    padding: 0;
     list-style: none;
-    font-size: 0.72rem;
-    color: var(--muted);
+  }
+
+  .legend ul:last-child {
+    margin-bottom: 0;
   }
 
   .legend li {

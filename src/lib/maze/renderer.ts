@@ -1,4 +1,15 @@
-import { DONE, FRONTIER, N, TRAIL, W, type MazeContext } from './types'
+import {
+  DONE,
+  FRINGE,
+  FRONTIER,
+  N,
+  SEARCHED,
+  TRAIL,
+  W,
+  type Grid,
+  type MazeContext,
+  type SolveContext,
+} from './types'
 
 export const PALETTE = {
   /** Untouched ground, not carved into yet */
@@ -14,6 +25,12 @@ export const PALETTE = {
   start: '#34d399',
   goal: '#fbbf24',
   wall: '#0d1017',
+  /** Solver: expanded, i.e. looked at and left behind */
+  searched: '#ddd0f4',
+  /** Solver: discovered, waiting to be expanded */
+  fringe: '#a78bfa',
+  /** Solver: the route from the start to the goal */
+  route: '#db2777',
 } as const
 
 export interface Viewport {
@@ -27,7 +44,12 @@ export interface Viewport {
  * Cells of the same colour are filled together and all walls go into a single
  * path stroked once, which keeps tens of thousands of cells inside one frame.
  */
-export function drawMaze(canvas: HTMLCanvasElement, maze: MazeContext, viewport: Viewport): void {
+export function drawMaze(
+  canvas: HTMLCanvasElement,
+  maze: MazeContext,
+  viewport: Viewport,
+  solve?: SolveContext | null,
+): void {
   const { grid } = maze
   const cell = Math.max(
     2,
@@ -58,23 +80,32 @@ export function drawMaze(canvas: HTMLCanvasElement, maze: MazeContext, viewport:
   // Flood the whole area with the untouched colour, then paint only the cells that moved on
   c.fillStyle = PALETTE.rock
   c.fillRect(-pad, -pad, cssWidth, cssHeight)
-  fillCells(c, maze, cell, FRONTIER, PALETTE.frontier)
-  fillCells(c, maze, cell, DONE, PALETTE.corridor)
-  fillCells(c, maze, cell, TRAIL, PALETTE.trail)
+  fillCells(c, grid, maze.state, cell, FRONTIER, PALETTE.frontier)
+  fillCells(c, grid, maze.state, cell, DONE, PALETTE.corridor)
+  fillCells(c, grid, maze.state, cell, TRAIL, PALETTE.trail)
 
+  // The search paints over the finished corridors, so it goes on top
+  if (solve) {
+    fillCells(c, grid, solve.state, cell, SEARCHED, PALETTE.searched)
+    fillCells(c, grid, solve.state, cell, FRINGE, PALETTE.fringe)
+    strokeRoute(c, grid, solve.path, cell)
+  }
+
+  // After the route, so the S and G markers stay readable under its ends
   drawEndpoints(c, maze, cell)
   strokeWalls(c, maze, cell, lineWidth, inner)
-  fillActive(c, maze, cell)
+  fillActive(c, grid, maze.active, cell)
+  if (solve) fillActive(c, grid, solve.active, cell)
 }
 
 function fillCells(
   c: CanvasRenderingContext2D,
-  maze: MazeContext,
+  grid: Grid,
+  state: Uint8Array,
   cell: number,
   target: number,
   color: string,
 ): void {
-  const { grid, state } = maze
   c.fillStyle = color
   for (let i = 0; i < state.length; i++) {
     if (state[i] !== target) continue
@@ -155,13 +186,43 @@ function drawEndpoints(c: CanvasRenderingContext2D, maze: MazeContext, cell: num
   }
 }
 
-function fillActive(c: CanvasRenderingContext2D, maze: MazeContext, cell: number): void {
-  if (maze.active.length === 0) return
-  const { grid } = maze
+function fillActive(
+  c: CanvasRenderingContext2D,
+  grid: Grid,
+  active: readonly number[],
+  cell: number,
+): void {
+  if (active.length === 0) return
   const inset = Math.min(Math.max(1, cell * 0.18), cell / 2 - 0.5)
   const size = Math.max(1, cell - inset * 2)
   c.fillStyle = PALETTE.active
-  for (const i of maze.active) {
+  for (const i of active) {
     c.fillRect((i % grid.cols) * cell + inset, Math.floor(i / grid.cols) * cell + inset, size, size)
   }
+}
+
+/**
+ * Draw the route the solver is on as one thick line through the cell centres.
+ * A route never crosses a wall, so it is laid down before the walls are stroked.
+ */
+function strokeRoute(
+  c: CanvasRenderingContext2D,
+  grid: Grid,
+  route: readonly number[],
+  cell: number,
+): void {
+  if (route.length < 2) return
+
+  c.strokeStyle = PALETTE.route
+  c.lineWidth = Math.max(1.5, cell * 0.3)
+  c.lineCap = 'round'
+  c.lineJoin = 'round'
+  c.beginPath()
+  for (let i = 0; i < route.length; i++) {
+    const x = (route[i] % grid.cols) * cell + cell / 2
+    const y = Math.floor(route[i] / grid.cols) * cell + cell / 2
+    if (i === 0) c.moveTo(x, y)
+    else c.lineTo(x, y)
+  }
+  c.stroke()
 }

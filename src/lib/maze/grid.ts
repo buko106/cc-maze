@@ -1,4 +1,14 @@
-import { N, E, S, W, UNVISITED, type Grid, type MazeContext } from './types'
+import {
+  N,
+  E,
+  S,
+  W,
+  UNSEEN,
+  UNVISITED,
+  type Grid,
+  type MazeContext,
+  type SolveContext,
+} from './types'
 
 export interface Direction {
   readonly bit: number
@@ -57,4 +67,40 @@ export function shuffle<T>(items: T[], rng: () => number): T[] {
 
 export function pick<T>(items: readonly T[], rng: () => number): T {
   return items[Math.floor(rng() * items.length)]
+}
+
+/** A fresh search over an already generated maze. */
+export function createSolveContext(maze: MazeContext): SolveContext {
+  return {
+    grid: maze.grid,
+    state: new Uint8Array(maze.grid.links.length).fill(UNSEEN),
+    start: maze.entrance,
+    goal: maze.exit,
+    path: [],
+    active: [],
+    expanded: 0,
+    found: false,
+  }
+}
+
+/**
+ * Neighbours that can be walked to from index, i.e. the wall between them is
+ * already down. Writes into out and returns it, so a solver can reuse one array
+ * instead of allocating on every step.
+ */
+export function openNeighbors(grid: Grid, index: number, out: number[]): number[] {
+  out.length = 0
+  for (const dir of DIRS) {
+    if (!(grid.links[index] & dir.bit)) continue
+    const next = neighbor(grid, index, dir)
+    if (next >= 0) out.push(next)
+  }
+  return out
+}
+
+/** Walk the parent links back from a cell to build the route that reaches it. */
+export function tracePath(parent: Int32Array, cell: number): number[] {
+  const path: number[] = []
+  for (let at = cell; at >= 0; at = parent[at]) path.push(at)
+  return path.reverse()
 }

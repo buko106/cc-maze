@@ -1,21 +1,21 @@
 <script lang="ts">
   import { drawMaze } from './maze/renderer'
-  import type { MazeContext } from './maze/types'
+  import type { MazeContext, SolveContext } from './maze/types'
 
-  let { maze }: { maze: MazeContext } = $props()
+  let { maze, solve }: { maze: MazeContext; solve: SolveContext | null } = $props()
 
   let wrapper = $state<HTMLDivElement>()
   let canvas = $state<HTMLCanvasElement>()
   let available = $state({ width: 0, height: 0 })
 
   /**
-   * Called by the generation loop on every frame.
-   * MazeContext is mutated in place and never reassigned, so drawing has to be
-   * triggered explicitly.
+   * Called by the generation and search loops on every frame.
+   * Both contexts are mutated in place and never reassigned, so drawing has to
+   * be triggered explicitly.
    */
   export function redraw(): void {
     if (!canvas || available.width <= 0 || available.height <= 0) return
-    drawMaze(canvas, maze, available)
+    drawMaze(canvas, maze, available, solve)
   }
 
   $effect(() => {
@@ -28,7 +28,7 @@
     return () => observer.disconnect()
   })
 
-  // Follows both a rebuilt maze and a resize on its own, since redraw reads both
+  // Follows a rebuilt maze, a new search and a resize on its own, since redraw reads them all
   $effect(redraw)
 </script>
 

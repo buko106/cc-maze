@@ -1,6 +1,6 @@
 # cc-maze
 
-迷路生成 WEB アプリ。概要・コマンド・設計方針は [README.md](README.md) を参照。
+迷路の生成と探索を可視化する WEB アプリ。概要・コマンド・設計方針は [README.md](README.md) を参照。
 
 ## 言語の使い分け
 
