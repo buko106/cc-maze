@@ -2,6 +2,8 @@
 
 迷路を作るところと、解くところをそのまま眺められる WEB アプリ。Vite + Svelte 5 (runes) + TypeScript。
 
+**公開先: https://www.buko106.tokyo/cc-maze/**（`main` への push で GitHub Pages へ自動デプロイ）
+
 - **生成**: 再帰的バックトラッカー / Kruskal 法 / Prim 法
 - **探索**: 深さ優先探索 (DFS) / 幅優先探索 (BFS) / A\* (マンハッタン距離)
 
