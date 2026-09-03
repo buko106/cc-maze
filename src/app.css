@@ -1,0 +1,36 @@
+:root {
+  --bg: #0f1115;
+  --panel: #161a22;
+  --panel-raised: #1c212c;
+  --border: #262c39;
+  --text: #e6e9f0;
+  --muted: #949cad;
+  --accent: #7dd3fc;
+  --accent-strong: #38bdf8;
+
+  color-scheme: dark;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Hiragino Sans',
+    'Noto Sans JP',
+    sans-serif;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}

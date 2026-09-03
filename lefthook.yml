@@ -1,0 +1,19 @@
+# https://lefthook.dev/configuration/
+pre-commit:
+  # prettier と eslint --fix は同じファイルを書き換えるので直列に走らせる
+  parallel: false
+  jobs:
+    - name: prettier
+      glob: '*.{js,ts,svelte,css,json,md,html,yml,yaml}'
+      run: npx prettier --write --ignore-unknown {staged_files}
+      stage_fixed: true
+
+    - name: eslint
+      glob: '*.{js,ts,svelte}'
+      run: npx eslint --fix --no-warn-ignored {staged_files}
+      stage_fixed: true
+
+commit-msg:
+  jobs:
+    - name: commitlint
+      run: npx commitlint --edit {1}
