@@ -60,8 +60,16 @@
     { color: PALETTE.active, label: '注目セル' },
   ]
 
-  const INITIAL_COLS = 28
-  const INITIAL_ROWS = 20
+  /**
+   * A phone held upright starts with a smaller maze: at that width 28x20 leaves
+   * cells about 10px across, too small to tell the search colours apart.
+   * Roughly square, because the strip the maze is pinned into is about as wide
+   * as it is tall -- a portrait maze would leave the sides empty.
+   * The breakpoint has to stay in step with the one in the stylesheet below.
+   */
+  const NARROW = window.matchMedia('(max-width: 780px)').matches
+  const INITIAL_COLS = NARROW ? 18 : 28
+  const INITIAL_ROWS = NARROW ? 18 : 20
 
   let cols = $state(INITIAL_COLS)
   let rows = $state(INITIAL_ROWS)
@@ -291,6 +299,12 @@
 </script>
 
 <div class="app">
+  <!-- The maze comes first so that stacking it above the panel on a phone takes
+       no visual reordering, and the reading order still matches the screen -->
+  <main class="stage">
+    <MazeCanvas bind:this={view} {maze} {solve} />
+  </main>
+
   <aside class="panel">
     <div class="panel-body">
       <header>
@@ -451,10 +465,6 @@
       </div>
     </div>
   </aside>
-
-  <main class="stage">
-    <MazeCanvas bind:this={view} {maze} {solve} />
-  </main>
 </div>
 
 <style>
@@ -471,6 +481,7 @@
     display: grid;
     /* Only the body scrolls; the action row stays visible as a footer */
     grid-template-rows: minmax(0, 1fr) auto;
+    grid-area: 1 / 1;
     min-height: 0;
     background: var(--panel);
     border-right: 1px solid var(--border);
@@ -519,6 +530,9 @@
 
   .algorithm {
     display: grid;
+    /* Contains the hidden radio below; without it the radio is laid out against
+       the viewport and drags the page height along with the list */
+    position: relative;
     gap: 0.3rem;
     padding: 0.7rem 0.8rem;
     border: 1px solid var(--border);
@@ -606,6 +620,7 @@
   }
 
   .segmented label {
+    position: relative;
     padding: 0.42rem 0.2rem;
     border: 1px solid var(--border);
     border-radius: 7px;
@@ -762,31 +777,92 @@
   }
 
   .stage {
+    grid-area: 1 / 2;
     padding: 1.5rem;
     min-width: 0;
     min-height: 0;
   }
 
+  /*
+   * Phone held upright. The maze is pinned to the top of the screen and the two
+   * action rows to the bottom, so the settings in between can be scrolled
+   * without ever losing sight of the maze or of the buttons that drive it.
+   */
   @media (max-width: 780px) {
+    /* Block flow rather than grid: a sticky grid item may only travel within its
+       own row, which here is exactly its own height, so it would never move. */
     .app {
-      grid-template-columns: 1fr;
-      grid-template-rows: auto minmax(0, 1fr);
+      display: block;
       height: auto;
       min-height: 100%;
       overflow: visible;
     }
 
-    .panel-body {
-      overflow-y: visible;
-    }
-
-    .panel {
-      border-right: none;
+    .stage {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      /* dvh so the address bar sliding away does not resize the maze */
+      height: 42vh;
+      height: 42dvh;
+      min-height: 200px;
+      padding: 0.7rem;
+      background: var(--bg);
       border-bottom: 1px solid var(--border);
     }
 
-    .stage {
-      min-height: 60vh;
+    .panel {
+      display: block;
+      border-right: none;
+    }
+
+    .panel-body {
+      /* Clear the fixed action bar, and the home indicator underneath it */
+      padding: 1.1rem 0.9rem calc(8.5rem + env(safe-area-inset-bottom));
+      overflow-y: visible;
+    }
+
+    .actions {
+      position: fixed;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      z-index: 3;
+      padding: 0.6rem 0.9rem calc(0.6rem + env(safe-area-inset-bottom));
+      background: var(--panel);
+    }
+
+    /* 44px is about the smallest target a fingertip hits reliably */
+    button,
+    .segmented label {
+      min-height: 44px;
+      font-size: 0.85rem;
+    }
+
+    .segmented label {
+      display: grid;
+      place-items: center;
+    }
+
+    .algorithm {
+      padding: 0.8rem 0.85rem;
+    }
+
+    .algorithm-name {
+      font-size: 0.92rem;
+    }
+
+    .algorithm-description {
+      font-size: 0.78rem;
+    }
+
+    /* The thumb keeps its size, but the band you can grab it by grows */
+    input[type='range'] {
+      height: 2.75rem;
+    }
+
+    h1 {
+      font-size: 1.05rem;
     }
   }
 </style>
