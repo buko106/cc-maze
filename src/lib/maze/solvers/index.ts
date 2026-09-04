@@ -11,6 +11,11 @@ export interface SolverEntry {
   readonly name: string
   /** One-line blurb for the UI. Describes how the search spreads. */
   readonly description: string
+  /**
+   * What a loop does to this method, for the methods that lean on the maze
+   * being perfect. Shown as a warning while the maze is braided.
+   */
+  readonly braidNote?: string
   readonly run: SolveAlgorithm
 }
 
@@ -49,6 +54,8 @@ export const solvers: readonly SolverEntry[] = [
     name: '右手法（壁伝い）',
     description:
       '右手を壁につけたまま歩き続ける。全体を見ずに手探りで進むので大回りするが、完全迷路なら必ず着く。',
+    braidNote:
+      'ループができると壁が島になり、そこに乗ると回り続けて出られなくなる。この迷路はスタートもゴールも外壁に接しているので実際にはたどり着くが、通った輪がそのまま経路に残り、同じセルを何度も通る線になる。',
     run: wallFollower,
   },
   {
@@ -56,6 +63,8 @@ export const solvers: readonly SolverEntry[] = [
     name: '行き止まり埋め',
     description:
       '行き止まりを片端から塗り潰すと、最後に経路だけが残る。ゴールの方向を見ないので、ほぼ全面を塗る。',
+    braidNote:
+      'ループには行き止まりがないので埋め残る。残った分かれ道のどちらが経路かを決める手がかりがなく、少しでもループがあるとほとんど「到達できず」に終わる。',
     run: deadEndFilling,
   },
 ]

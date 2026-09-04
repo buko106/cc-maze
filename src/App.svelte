@@ -2,11 +2,12 @@
   import { onMount } from 'svelte'
   import MazeCanvas from './lib/MazeCanvas.svelte'
   import { algorithms, getAlgorithm } from './lib/maze/algorithms'
+  import { braid, countDeadEnds } from './lib/maze/braid'
   import { createContext, createSolveContext } from './lib/maze/grid'
   import { PALETTE } from './lib/maze/renderer'
   import { createRng, randomSeed } from './lib/maze/rng'
   import { getSolver, solvers } from './lib/maze/solvers'
-  import type { SolveContext } from './lib/maze/types'
+  import type { MazeContext, SolveContext } from './lib/maze/types'
 
   type RunState = 'idle' | 'running' | 'paused' | 'done'
 
@@ -74,12 +75,15 @@
   let cols = $state(INITIAL_COLS)
   let rows = $state(INITIAL_ROWS)
   let algorithmId = $state(algorithms[0].id)
+  /** Share of the dead ends to open up once the maze is carved. 0 keeps it perfect. */
+  let braidPercent = $state(0)
   let speedId = $state('fast')
   let solverId = $state(solvers[0].id)
   let solveSpeedId = $state('fast')
 
   let runState = $state<RunState>('idle')
   let steps = $state(0)
+  let deadEnds = $state(0)
   // Mutated in place, so $state.raw: only rebuilding it needs to trigger a redraw.
   let maze = $state.raw(createContext(INITIAL_COLS, INITIAL_ROWS))
 
@@ -90,6 +94,7 @@
   let solve = $state.raw<SolveContext | null>(null)
   let expanded = $state(0)
   let routeLength = $state(0)
+  let solveFound = $state(false)
 
   let view: ReturnType<typeof MazeCanvas> | undefined = $state()
   let generator: Generator<void, void, void> | null = null
@@ -100,6 +105,9 @@
   const algorithm = $derived(getAlgorithm(algorithmId))
   const solver = $derived(getSolver(solverId))
   const solvable = $derived(runState === 'done')
+  const braided = $derived(braidPercent > 0)
+  /** Set while a method that leans on a perfect maze is picked on a braided one. */
+  const braidNote = $derived(braided ? solver.braidNote : undefined)
   const speed = $derived(getSpeed(speedId))
   const solveSpeed = $derived(getSpeed(solveSpeedId))
   const primaryLabel = $derived(
@@ -110,6 +118,9 @@
         : runState === 'done'
           ? '生成し直す'
           : '生成する',
+  )
+  const solveStatus = $derived(
+    solveState === 'done' && !solveFound ? '到達できず' : SOLVE_STATUS_LABEL[solveState],
   )
   const solveLabel = $derived(
     solveState === 'running'
@@ -126,13 +137,23 @@
     generator = null
     runState = 'idle'
     steps = 0
+    deadEnds = 0
     maze = createContext(cols, rows)
     clearSolve()
   }
 
+  /**
+   * Carving and braiding chained into a single generator, so the loop that
+   * animates it neither knows nor cares that a maze is built in two phases.
+   */
+  function* buildMaze(ctx: MazeContext, rng: () => number): Generator<void, void, void> {
+    yield* algorithm.run(ctx, rng)
+    yield* braid(ctx, rng, braidPercent / 100)
+  }
+
   function ensureGenerator(): void {
     if (runState === 'done') reset()
-    if (!generator) generator = algorithm.run(maze, createRng(randomSeed()))
+    if (!generator) generator = buildMaze(maze, createRng(randomSeed()))
   }
 
   /** Advance one step. Returns true once generation has finished. */
@@ -141,6 +162,8 @@
     if (generator.next().done) {
       generator = null
       runState = 'done'
+      // Only worth counting once the braiding has had its go at them
+      deadEnds = countDeadEnds(maze.grid)
       return true
     }
     steps++
@@ -189,6 +212,7 @@
     solve = null
     expanded = 0
     routeLength = 0
+    solveFound = false
   }
 
   function ensureSolver(): void {
@@ -215,6 +239,7 @@
   function syncSolveStats(): void {
     expanded = solve?.expanded ?? 0
     routeLength = solve?.path.length ?? 0
+    solveFound = solve?.found ?? false
   }
 
   function solveLoop(): void {
@@ -348,10 +373,22 @@
             </label>
           {/each}
         </div>
-        <p class="hint">
-          完全迷路なので 2 点を結ぶ道は 1 本しかなく、どの手法でも同じ経路にたどり着く。差が出るのは
-          <b>そこへ行き着くまでに何セル調べたか</b>。
-        </p>
+        {#if braided}
+          <p class="hint">
+            ループがあるので 2 点を結ぶ道は何本もある。差が出るのは調べたセル数だけではなく、
+            <b>手法ごとに見つける経路そのものが変わる</b>。BFS・A*・双方向 BFS
+            は必ず最短の道を返し、DFS と右手法は先に行き当たった道を返す。
+          </p>
+        {:else}
+          <p class="hint">
+            完全迷路なので 2 点を結ぶ道は 1
+            本しかなく、どの手法でも同じ経路にたどり着く。差が出るのは
+            <b>そこへ行き着くまでに何セル調べたか</b>。
+          </p>
+        {/if}
+        {#if braidNote}
+          <p class="warning">{braidNote}</p>
+        {/if}
       </fieldset>
 
       <fieldset>
@@ -376,6 +413,26 @@
             oninput={(event) => reconfigure(() => (rows = event.currentTarget.valueAsNumber))}
           />
         </label>
+      </fieldset>
+
+      <fieldset>
+        <legend>ループ</legend>
+        <label class="slider">
+          <span class="slider-label">行き止まりをつぶす <b>{braidPercent}%</b></span>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            step="5"
+            value={braidPercent}
+            oninput={(event) =>
+              reconfigure(() => (braidPercent = event.currentTarget.valueAsNumber))}
+          />
+        </label>
+        <p class="hint">
+          掘り終えた迷路の行き止まりを開けて輪を作る。0% なら完全迷路のまま、100%
+          なら行き止まりがひとつも残らない。輪ができるほど、迷路を抜ける道は何本もできる。
+        </p>
       </fieldset>
 
       <fieldset>
@@ -419,8 +476,10 @@
       <dl class="status">
         <dt>生成</dt>
         <dd>{STATUS_LABEL[runState]} / {steps.toLocaleString()} ステップ</dd>
+        <dt>行き止まり</dt>
+        <dd>{runState === 'done' ? deadEnds.toLocaleString() : '—'}</dd>
         <dt>探索</dt>
-        <dd>{SOLVE_STATUS_LABEL[solveState]} / {solveSteps.toLocaleString()} ステップ</dd>
+        <dd>{solveStatus} / {solveSteps.toLocaleString()} ステップ</dd>
         <dt>調べたセル</dt>
         <dd>
           {expanded.toLocaleString()} / {(cols * rows).toLocaleString()}
@@ -661,6 +720,18 @@
   .hint b {
     color: var(--text);
     font-weight: 600;
+  }
+
+  /* Same voice as .hint, but for the method that is about to misbehave */
+  .warning {
+    margin: 0.7rem 0 0;
+    padding: 0.55rem 0.7rem;
+    border-left: 2px solid var(--caution);
+    border-radius: 0 6px 6px 0;
+    background: #241f14;
+    font-size: 0.72rem;
+    line-height: 1.6;
+    color: #efd9a6;
   }
 
   .actions {

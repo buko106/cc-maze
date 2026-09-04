@@ -7,6 +7,8 @@
   --muted: #949cad;
   --accent: #7dd3fc;
   --accent-strong: #38bdf8;
+  /* For a note about something that is going to misbehave, not an error */
+  --caution: #fbbf24;
 
   color-scheme: dark;
   font-family:
