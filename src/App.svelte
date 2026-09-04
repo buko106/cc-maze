@@ -53,6 +53,9 @@
   const LEGEND_SOLVE = [
     { color: PALETTE.searched, label: '探索済み' },
     { color: PALETTE.fringe, label: 'フロンティア' },
+    // Only the bidirectional search paints these two
+    { color: PALETTE.searchedBack, label: '探索済み（ゴール側）' },
+    { color: PALETTE.fringeBack, label: 'フロンティア（ゴール側）' },
     { color: PALETTE.route, label: '経路' },
     { color: PALETTE.active, label: '注目セル' },
   ]

@@ -1,7 +1,10 @@
 import type { SolveAlgorithm } from '../types'
 import { astar } from './astar'
 import { bfs } from './bfs'
+import { bidirectional } from './bidirectional'
+import { deadEndFilling } from './deadend'
 import { dfs } from './dfs'
+import { wallFollower } from './wallfollower'
 
 export interface SolverEntry {
   readonly id: string
@@ -33,6 +36,27 @@ export const solvers: readonly SolverEntry[] = [
     description:
       '「ここまでの歩数 + ゴールまでの直線距離」が小さいセルを優先。ゴール方向へ偏って伸び、無駄が最も少ない。',
     run: astar,
+  },
+  {
+    id: 'bidirectional',
+    name: '双方向 BFS',
+    description:
+      'スタートとゴールから交互に波を広げ、ぶつかった所で繋ぐ。多くの迷路で BFS より調べるセルが減る。',
+    run: bidirectional,
+  },
+  {
+    id: 'wall-follower',
+    name: '右手法（壁伝い）',
+    description:
+      '右手を壁につけたまま歩き続ける。全体を見ずに手探りで進むので大回りするが、完全迷路なら必ず着く。',
+    run: wallFollower,
+  },
+  {
+    id: 'dead-end',
+    name: '行き止まり埋め',
+    description:
+      '行き止まりを片端から塗り潰すと、最後に経路だけが残る。ゴールの方向を見ないので、ほぼ全面を塗る。',
+    run: deadEndFilling,
   },
 ]
 

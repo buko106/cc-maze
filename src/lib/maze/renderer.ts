@@ -1,9 +1,11 @@
 import {
   DONE,
   FRINGE,
+  FRINGE_BACK,
   FRONTIER,
   N,
   SEARCHED,
+  SEARCHED_BACK,
   TRAIL,
   W,
   type Grid,
@@ -31,6 +33,9 @@ export const PALETTE = {
   fringe: '#a78bfa',
   /** Solver: the route from the start to the goal */
   route: '#db2777',
+  /** Solver: the same two for a wave coming back from the goal */
+  searchedBack: '#f7e3c0',
+  fringeBack: '#e9a23b',
 } as const
 
 export interface Viewport {
@@ -87,7 +92,9 @@ export function drawMaze(
   // The search paints over the finished corridors, so it goes on top
   if (solve) {
     fillCells(c, grid, solve.state, cell, SEARCHED, PALETTE.searched)
+    fillCells(c, grid, solve.state, cell, SEARCHED_BACK, PALETTE.searchedBack)
     fillCells(c, grid, solve.state, cell, FRINGE, PALETTE.fringe)
+    fillCells(c, grid, solve.state, cell, FRINGE_BACK, PALETTE.fringeBack)
     strokeRoute(c, grid, solve.path, cell)
   }
 

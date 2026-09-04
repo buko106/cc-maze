@@ -1,7 +1,10 @@
 import type { MazeAlgorithm } from '../types'
 import { backtracker } from './backtracker'
+import { division } from './division'
+import { eller } from './eller'
 import { kruskal } from './kruskal'
 import { prim } from './prim'
+import { wilson } from './wilson'
 
 export interface AlgorithmEntry {
   readonly id: string
@@ -33,6 +36,27 @@ export const algorithms: readonly AlgorithmEntry[] = [
     description:
       '通路に隣接する候補からランダムに選んで繋げる。1 点から放射状に広がり、短い行き止まりが多い。',
     run: prim,
+  },
+  {
+    id: 'division',
+    name: '再帰分割',
+    description:
+      '他とは逆に、何もない空間を壁で仕切っていく。一直線の長い壁と部屋ができ、見通しのよい迷路になる。',
+    run: division,
+  },
+  {
+    id: 'wilson',
+    name: 'Wilson 法',
+    description:
+      'ランダムに歩き回り、輪を作ったらその分を消す。形の偏りが一切ない唯一の手法。序盤は延々と彷徨う。',
+    run: wilson,
+  },
+  {
+    id: 'eller',
+    name: 'Eller 法',
+    description:
+      '1 行ずつ確定させ、上の行を二度と見ない。覚えておくのは 1 行分だけで、いくらでも長い迷路を作れる。',
+    run: eller,
   },
 ]
 

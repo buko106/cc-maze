@@ -55,6 +55,9 @@ export const UNSEEN = 0
 export const FRINGE = 1
 /** Expanded: every neighbour of this cell has been looked at */
 export const SEARCHED = 2
+/** Same two, for a search that also works backwards from the goal */
+export const FRINGE_BACK = 3
+export const SEARCHED_BACK = 4
 
 export interface SolveContext {
   readonly grid: Grid
