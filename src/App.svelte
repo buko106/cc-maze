@@ -24,6 +24,23 @@
     done: '到達',
   }
 
+  interface Speed {
+    readonly id: string
+    readonly name: string
+    /** Steps to take per frame. Infinity means "do not animate, just finish". */
+    readonly stepsPerFrame: number
+  }
+
+  const SPEEDS: readonly Speed[] = [
+    { id: 'slow', name: 'ゆっくり', stepsPerFrame: 2 },
+    { id: 'fast', name: '早く', stepsPerFrame: 20 },
+    { id: 'instant', name: '一気に', stepsPerFrame: Infinity },
+  ]
+
+  function getSpeed(id: string): Speed {
+    return SPEEDS.find((entry) => entry.id === id) ?? SPEEDS[0]
+  }
+
   const LEGEND_GENERATE = [
     { color: PALETTE.rock, label: '未踏' },
     { color: PALETTE.frontier, label: '候補' },
@@ -46,9 +63,9 @@
   let cols = $state(INITIAL_COLS)
   let rows = $state(INITIAL_ROWS)
   let algorithmId = $state(algorithms[0].id)
-  let stepsPerFrame = $state(6)
+  let speedId = $state('fast')
   let solverId = $state(solvers[0].id)
-  let solveStepsPerFrame = $state(4)
+  let solveSpeedId = $state('fast')
 
   let runState = $state<RunState>('idle')
   let steps = $state(0)
@@ -72,6 +89,8 @@
   const algorithm = $derived(getAlgorithm(algorithmId))
   const solver = $derived(getSolver(solverId))
   const solvable = $derived(runState === 'done')
+  const speed = $derived(getSpeed(speedId))
+  const solveSpeed = $derived(getSpeed(solveSpeedId))
   const primaryLabel = $derived(
     runState === 'running'
       ? '一時停止'
@@ -118,7 +137,7 @@
   }
 
   function loop(): void {
-    for (let i = 0; i < stepsPerFrame; i++) {
+    for (let i = 0; i < speed.stepsPerFrame; i++) {
       if (advance()) break
     }
     view?.redraw()
@@ -126,9 +145,13 @@
   }
 
   function start(): void {
+    cancelAnimationFrame(frame)
+    if (speed.stepsPerFrame === Infinity) {
+      complete()
+      return
+    }
     ensureGenerator()
     runState = 'running'
-    cancelAnimationFrame(frame)
     frame = requestAnimationFrame(loop)
   }
 
@@ -184,7 +207,7 @@
   }
 
   function solveLoop(): void {
-    for (let i = 0; i < solveStepsPerFrame; i++) {
+    for (let i = 0; i < solveSpeed.stepsPerFrame; i++) {
       if (advanceSolve()) break
     }
     syncSolveStats()
@@ -194,9 +217,13 @@
 
   function startSolve(): void {
     if (!solvable) return
+    cancelAnimationFrame(frame)
+    if (solveSpeed.stepsPerFrame === Infinity) {
+      completeSolve()
+      return
+    }
     ensureSolver()
     solveState = 'running'
-    cancelAnimationFrame(frame)
     frame = requestAnimationFrame(solveLoop)
   }
 
@@ -228,6 +255,17 @@
     solverId = id
     clearSolve()
     if (wasActive) startSolve()
+  }
+
+  /** Picking 一気に while it is still running finishes off whatever is left. */
+  function selectSpeed(id: string): void {
+    speedId = id
+    if (runState === 'running') start()
+  }
+
+  function selectSolveSpeed(id: string): void {
+    solveSpeedId = id
+    if (solveState === 'running') startSolve()
   }
 
   function togglePlay(): void {
@@ -325,14 +363,40 @@
 
       <fieldset>
         <legend>速度</legend>
-        <label class="slider">
-          <span class="slider-label">生成 <b>{stepsPerFrame}</b> ステップ / フレーム</span>
-          <input type="range" min="1" max="120" bind:value={stepsPerFrame} />
-        </label>
-        <label class="slider">
-          <span class="slider-label">探索 <b>{solveStepsPerFrame}</b> ステップ / フレーム</span>
-          <input type="range" min="1" max="120" bind:value={solveStepsPerFrame} />
-        </label>
+        <div class="speed">
+          <span class="speed-label">生成</span>
+          <div class="segmented">
+            {#each SPEEDS as option (option.id)}
+              <label class:selected={option.id === speedId}>
+                <input
+                  type="radio"
+                  name="speed"
+                  value={option.id}
+                  checked={option.id === speedId}
+                  onchange={() => selectSpeed(option.id)}
+                />
+                {option.name}
+              </label>
+            {/each}
+          </div>
+        </div>
+        <div class="speed">
+          <span class="speed-label">探索</span>
+          <div class="segmented">
+            {#each SPEEDS as option (option.id)}
+              <label class:selected={option.id === solveSpeedId}>
+                <input
+                  type="radio"
+                  name="solve-speed"
+                  value={option.id}
+                  checked={option.id === solveSpeedId}
+                  onchange={() => selectSolveSpeed(option.id)}
+                />
+                {option.name}
+              </label>
+            {/each}
+          </div>
+        </div>
       </fieldset>
 
       <dl class="status">
@@ -376,14 +440,10 @@
     <div class="actions">
       <div class="action-row">
         <button class="primary" onclick={togglePlay}>{primaryLabel}</button>
-        <button onclick={complete} disabled={runState === 'done'}>一気に生成</button>
         <button onclick={reset} disabled={runState === 'idle'}>リセット</button>
       </div>
       <div class="action-row">
         <button class="primary" onclick={toggleSolve} disabled={!solvable}>{solveLabel}</button>
-        <button onclick={completeSolve} disabled={!solvable || solveState === 'done'}>
-          一気に解く
-        </button>
         <button onclick={clearSolve} disabled={solveState === 'idle'}>クリア</button>
       </div>
     </div>
@@ -519,6 +579,60 @@
     accent-color: var(--accent-strong);
   }
 
+  .speed {
+    display: grid;
+    grid-template-columns: 3rem 1fr;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .speed:last-child {
+    margin-bottom: 0;
+  }
+
+  .speed-label {
+    font-size: 0.78rem;
+    color: var(--muted);
+  }
+
+  .segmented {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.3rem;
+  }
+
+  .segmented label {
+    padding: 0.42rem 0.2rem;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: var(--panel-raised);
+    font-size: 0.76rem;
+    text-align: center;
+    white-space: nowrap;
+    cursor: pointer;
+    transition:
+      border-color 0.15s,
+      background 0.15s;
+  }
+
+  .segmented label:hover {
+    border-color: #3a4356;
+  }
+
+  .segmented label.selected {
+    border-color: transparent;
+    background: var(--accent-strong);
+    color: #06121c;
+    font-weight: 700;
+  }
+
+  .segmented input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+  }
+
   .hint {
     margin: 0.7rem 0 0;
     font-size: 0.72rem;
@@ -540,7 +654,7 @@
 
   .action-row {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 0.4rem;
   }
 
