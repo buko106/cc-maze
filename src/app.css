@@ -23,6 +23,20 @@
   box-sizing: border-box;
 }
 
+/*
+ * Two taps in quick succession on controls sitting close together -- 生成する
+ * then 解く, or one button twice -- are read as a double tap on phones and
+ * tablets, which zooms the page instead of pressing the buttons.
+ * "manipulation" drops the double-tap-to-zoom gesture for touches that start on
+ * a control; scrolling and pinch zoom keep working.
+ */
+button,
+label,
+input,
+select {
+  touch-action: manipulation;
+}
+
 html,
 body,
 #app {

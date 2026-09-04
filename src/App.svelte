@@ -668,6 +668,9 @@
     gap: 0.45rem;
     padding: 0.9rem 1.25rem 1.1rem;
     border-top: 1px solid var(--border);
+    /* The controls themselves opt out of double-tap zoom in app.css; the bar
+       around them has to as well, or a tap landing in a gap revives the gesture */
+    touch-action: manipulation;
   }
 
   .action-row {
@@ -828,6 +831,9 @@
       bottom: 0;
       left: 0;
       z-index: 3;
+      /* Wider than on a pointer, so a thumb aiming for 解く does not land on
+         生成し直す in the row above */
+      gap: 0.7rem;
       padding: 0.6rem 0.9rem calc(0.6rem + env(safe-area-inset-bottom));
       background: var(--panel);
     }
