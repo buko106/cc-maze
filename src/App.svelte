@@ -4,6 +4,7 @@
   import { algorithms, getAlgorithm } from './lib/maze/algorithms'
   import { braid, countDeadEnds } from './lib/maze/braid'
   import { createContext, createSolveContext } from './lib/maze/grid'
+  import { getPlacement, placements } from './lib/maze/placements'
   import { PALETTE } from './lib/maze/renderer'
   import { createRng, randomSeed } from './lib/maze/rng'
   import { getSolver, solvers } from './lib/maze/solvers'
@@ -75,6 +76,8 @@
   let cols = $state(INITIAL_COLS)
   let rows = $state(INITIAL_ROWS)
   let algorithmId = $state(algorithms[0].id)
+  /** Where S and G go: the two corners, or a fresh pair of cells every build. */
+  let placementId = $state(placements[0].id)
   /** Share of the dead ends to open up once the maze is carved. 0 keeps it perfect. */
   let braidPercent = $state(0)
   let speedId = $state('fast')
@@ -103,6 +106,7 @@
   let frame = 0
 
   const algorithm = $derived(getAlgorithm(algorithmId))
+  const placement = $derived(getPlacement(placementId))
   const solver = $derived(getSolver(solverId))
   const solvable = $derived(runState === 'done')
   const braided = $derived(braidPercent > 0)
@@ -138,7 +142,8 @@
     runState = 'idle'
     steps = 0
     deadEnds = 0
-    maze = createContext(cols, rows)
+    // A random placement draws a new S and G here, so every rebuild moves them
+    maze = createContext(cols, rows, placement.place(cols, rows, createRng(randomSeed())))
     clearSolve()
   }
 
@@ -416,6 +421,25 @@
       </fieldset>
 
       <fieldset>
+        <legend>スタートとゴール</legend>
+        <div class="segmented">
+          {#each placements as option (option.id)}
+            <label class:selected={option.id === placementId}>
+              <input
+                type="radio"
+                name="placement"
+                value={option.id}
+                checked={option.id === placementId}
+                onchange={() => reconfigure(() => (placementId = option.id))}
+              />
+              {option.name}
+            </label>
+          {/each}
+        </div>
+        <p class="hint">{placement.description}</p>
+      </fieldset>
+
+      <fieldset>
         <legend>ループ</legend>
         <label class="slider">
           <span class="slider-label">行き止まりをつぶす <b>{braidPercent}%</b></span>
@@ -672,9 +696,12 @@
     color: var(--muted);
   }
 
+  /* Auto columns rather than a fixed three, so the two placement buttons fill
+     the row just as the three speed buttons do */
   .segmented {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
     gap: 0.3rem;
   }
 

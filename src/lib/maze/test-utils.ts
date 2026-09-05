@@ -3,7 +3,7 @@
  * them, so they never reach the bundle.
  */
 import { braid } from './braid'
-import { DIRS, createContext, createSolveContext, openNeighbors } from './grid'
+import { DIRS, createContext, createSolveContext, openNeighbors, randomEndpoints } from './grid'
 import { createRng } from './rng'
 import {
   DONE,
@@ -46,13 +46,15 @@ export interface BuildOptions {
   seed?: number
   /** Share of the dead ends to open up, the way braid() takes it (0 to 1). */
   braidRatio?: number
+  /** Drop S and G anywhere instead of leaving them in their corners. */
+  randomEnds?: boolean
 }
 
-/** Carve a maze the way the app does, braiding included. */
+/** Carve a maze the way the app does, placement and braiding included. */
 export function buildMaze(algorithm: MazeAlgorithm, options: BuildOptions = {}): MazeContext {
-  const { cols = 12, rows = 10, seed = 1, braidRatio = 0 } = options
-  const ctx = createContext(cols, rows)
+  const { cols = 12, rows = 10, seed = 1, braidRatio = 0, randomEnds = false } = options
   const rng = createRng(seed)
+  const ctx = createContext(cols, rows, randomEnds ? randomEndpoints(cols, rows, rng) : undefined)
   drain(algorithm(ctx, rng))
   drain(braid(ctx, rng, braidRatio))
   return ctx

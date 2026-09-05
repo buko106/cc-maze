@@ -19,6 +19,8 @@ const seedArb = fc.integer({ min: 0, max: 0xffffffff })
 const sizeArb = fc.integer({ min: 5, max: 16 })
 const ratioArb = fc.integer({ min: 1, max: 20 }).map((n) => n / 20)
 const algorithmArb = fc.constantFrom(...algorithms.map((entry) => entry.run))
+// Both placements the app offers: S and G in their corners, or dropped anywhere
+const endsArb = fc.boolean()
 
 /** The methods that are meant to come back with a shortest route, loops or not. */
 const OPTIMAL = ['bfs', 'astar', 'bidirectional']
@@ -26,32 +28,46 @@ const OPTIMAL = ['bfs', 'astar', 'bidirectional']
 const maze = (options: BuildOptions = {}) => buildMaze(algorithms[0].run, options)
 
 describe.each(solvers.map((entry) => [entry.id, entry] as const))('%s', (id, entry) => {
-  it('walks a perfect maze from S to G', () => {
+  it('walks a perfect maze from S to G, wherever the two are', () => {
     fc.assert(
-      fc.property(algorithmArb, sizeArb, sizeArb, seedArb, (algorithm, cols, rows, seed) => {
-        const ctx = buildMaze(algorithm, { cols, rows, seed })
-        const result = runSolver(entry.run, ctx)
+      fc.property(
+        algorithmArb,
+        sizeArb,
+        sizeArb,
+        seedArb,
+        endsArb,
+        (algorithm, cols, rows, seed, randomEnds) => {
+          const ctx = buildMaze(algorithm, { cols, rows, seed, randomEnds })
+          const result = runSolver(entry.run, ctx)
 
-        expect(result.found).toBe(true)
-        expect(result.path[0]).toBe(ctx.entrance)
-        expect(result.path[result.path.length - 1]).toBe(ctx.exit)
-        expect(routeIsWalkable(ctx.grid, result.path)).toBe(true)
-        expect(result.expanded).toBeGreaterThan(0)
-        expect(result.active).toEqual([])
-      }),
+          expect(result.found).toBe(true)
+          expect(result.path[0]).toBe(ctx.entrance)
+          expect(result.path[result.path.length - 1]).toBe(ctx.exit)
+          expect(routeIsWalkable(ctx.grid, result.path)).toBe(true)
+          expect(result.expanded).toBeGreaterThan(0)
+          expect(result.active).toEqual([])
+        },
+      ),
     )
   })
 
   it('finds the one route a perfect maze has, whichever method it is', () => {
     fc.assert(
-      fc.property(algorithmArb, sizeArb, sizeArb, seedArb, (algorithm, cols, rows, seed) => {
-        const ctx = buildMaze(algorithm, { cols, rows, seed })
-        const result = runSolver(entry.run, ctx)
-        // Exactly one path joins two cells of a perfect maze, so every method
-        // has to come back with the same one -- this is what the app claims
-        expect(result.path.length).toBe(shortestRouteLength(ctx.grid, ctx.entrance, ctx.exit))
-        expect(new Set(result.path).size).toBe(result.path.length)
-      }),
+      fc.property(
+        algorithmArb,
+        sizeArb,
+        sizeArb,
+        seedArb,
+        endsArb,
+        (algorithm, cols, rows, seed, randomEnds) => {
+          const ctx = buildMaze(algorithm, { cols, rows, seed, randomEnds })
+          const result = runSolver(entry.run, ctx)
+          // Exactly one path joins two cells of a perfect maze, so every method
+          // has to come back with the same one -- this is what the app claims
+          expect(result.path.length).toBe(shortestRouteLength(ctx.grid, ctx.entrance, ctx.exit))
+          expect(new Set(result.path).size).toBe(result.path.length)
+        },
+      ),
     )
   })
 
@@ -89,37 +105,51 @@ describe.each(solvers.map((entry) => [entry.id, entry] as const))('%s', (id, ent
 
   it('terminates on a braided maze, and only claims the goal when it got there', () => {
     fc.assert(
-      fc.property(sizeArb, sizeArb, seedArb, ratioArb, (cols, rows, seed, ratio) => {
-        // runSolver throws rather than hanging if the search runs away
-        const ctx = maze({ cols, rows, seed, braidRatio: ratio })
-        const result = runSolver(entry.run, ctx)
+      fc.property(
+        sizeArb,
+        sizeArb,
+        seedArb,
+        ratioArb,
+        endsArb,
+        (cols, rows, seed, ratio, randomEnds) => {
+          // runSolver throws rather than hanging if the search runs away
+          const ctx = maze({ cols, rows, seed, braidRatio: ratio, randomEnds })
+          const result = runSolver(entry.run, ctx)
 
-        if (result.found) {
-          expect(result.path[result.path.length - 1]).toBe(ctx.exit)
-          expect(routeIsWalkable(ctx.grid, result.path)).toBe(true)
-          // The wall follower is the one method whose route keeps the loops it
-          // walked -- its warning says so. Every other route stays a plain line.
-          if (id !== 'wall-follower') {
-            expect(new Set(result.path).size).toBe(result.path.length)
+          if (result.found) {
+            expect(result.path[result.path.length - 1]).toBe(ctx.exit)
+            expect(routeIsWalkable(ctx.grid, result.path)).toBe(true)
+            // The wall follower is the one method whose route keeps the loops it
+            // walked -- its warning says so. Every other route stays a plain line.
+            if (id !== 'wall-follower') {
+              expect(new Set(result.path).size).toBe(result.path.length)
+            }
+          } else {
+            // The panel shows 到達できず for this, so it had better be true
+            expect(result.path[result.path.length - 1]).not.toBe(ctx.exit)
           }
-        } else {
-          // The panel shows 到達できず for this, so it had better be true
-          expect(result.path[result.path.length - 1]).not.toBe(ctx.exit)
-        }
-        expect(result.active).toEqual([])
-      }),
+          expect(result.active).toEqual([])
+        },
+      ),
     )
   })
 
   if (OPTIMAL.includes(id)) {
     it('returns a shortest route even once the maze has loops', () => {
       fc.assert(
-        fc.property(sizeArb, sizeArb, seedArb, ratioArb, (cols, rows, seed, ratio) => {
-          const ctx = maze({ cols, rows, seed, braidRatio: ratio })
-          const result = runSolver(entry.run, ctx)
-          expect(result.found).toBe(true)
-          expect(result.path.length).toBe(shortestRouteLength(ctx.grid, ctx.entrance, ctx.exit))
-        }),
+        fc.property(
+          sizeArb,
+          sizeArb,
+          seedArb,
+          ratioArb,
+          endsArb,
+          (cols, rows, seed, ratio, randomEnds) => {
+            const ctx = maze({ cols, rows, seed, braidRatio: ratio, randomEnds })
+            const result = runSolver(entry.run, ctx)
+            expect(result.found).toBe(true)
+            expect(result.path.length).toBe(shortestRouteLength(ctx.grid, ctx.entrance, ctx.exit))
+          },
+        ),
       )
     })
   }
@@ -127,10 +157,20 @@ describe.each(solvers.map((entry) => [entry.id, entry] as const))('%s', (id, ent
   if (entry.braidNote === undefined) {
     it('gets there on a braided maze too, which is why it carries no warning', () => {
       fc.assert(
-        fc.property(sizeArb, sizeArb, seedArb, ratioArb, (cols, rows, seed, ratio) => {
-          const result = runSolver(entry.run, maze({ cols, rows, seed, braidRatio: ratio }))
-          expect(result.found).toBe(true)
-        }),
+        fc.property(
+          sizeArb,
+          sizeArb,
+          seedArb,
+          ratioArb,
+          endsArb,
+          (cols, rows, seed, ratio, randomEnds) => {
+            const result = runSolver(
+              entry.run,
+              maze({ cols, rows, seed, braidRatio: ratio, randomEnds }),
+            )
+            expect(result.found).toBe(true)
+          },
+        ),
       )
     })
   }
@@ -153,11 +193,12 @@ describe('the methods that lean on a perfect maze', () => {
   })
 
   /**
-   * The exact failure the wall follower's guard is there for, which a maze the
-   * app itself builds cannot reproduce: its start and goal both touch the outer
-   * wall, and a follower hugging that wall is bound to pass the goal. Here the
-   * goal sits behind a wall island instead, so the follower laps the ring for
-   * ever unless it notices that it is repeating itself.
+   * The exact failure the wall follower's guard is there for, cut down to a
+   * maze whose steps can be counted. With S and G in their corners the follower
+   * hugs the outer wall and is bound to pass the goal, so the app only walks
+   * into this once the ends are dropped at random: here the goal sits behind an
+   * island of walls, and the follower laps the ring for ever unless it notices
+   * that it is repeating itself.
    */
   it('the wall follower laps a wall island once and then gives up', () => {
     const cols = 5
@@ -202,11 +243,18 @@ describe('the methods that lean on a perfect maze', () => {
     '%s stops even when every dead end is gone',
     (_id, entry) => {
       fc.assert(
-        fc.property(algorithmArb, sizeArb, sizeArb, seedArb, (algorithm, cols, rows, seed) => {
-          const ctx = buildMaze(algorithm, { cols, rows, seed, braidRatio: 1 })
-          const result = runSolver(entry.run, ctx)
-          expect(result.active).toEqual([])
-        }),
+        fc.property(
+          algorithmArb,
+          sizeArb,
+          sizeArb,
+          seedArb,
+          endsArb,
+          (algorithm, cols, rows, seed, randomEnds) => {
+            const ctx = buildMaze(algorithm, { cols, rows, seed, braidRatio: 1, randomEnds })
+            const result = runSolver(entry.run, ctx)
+            expect(result.active).toEqual([])
+          },
+        ),
       )
     },
   )

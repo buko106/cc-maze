@@ -5,6 +5,7 @@ import {
   W,
   UNSEEN,
   UNVISITED,
+  type Endpoints,
   type Grid,
   type MazeContext,
   type SolveContext,
@@ -25,18 +26,73 @@ export const DIRS: readonly Direction[] = [
   { bit: W, dx: -1, dy: 0, opposite: E },
 ]
 
-export function createContext(cols: number, rows: number): MazeContext {
+export function createContext(
+  cols: number,
+  rows: number,
+  endpoints: Endpoints = cornerEndpoints(cols, rows),
+): MazeContext {
   const size = cols * rows
   const grid: Grid = { cols, rows, links: new Uint8Array(size) }
   return {
     grid,
     state: new Uint8Array(size).fill(UNVISITED),
-    // Start top-left, goal bottom-right. In a perfect maze any pair of cells
-    // is joined by exactly one path, so the choice only affects the looks.
-    entrance: 0,
-    exit: size - 1,
+    ...endpoints,
     active: [],
   }
+}
+
+/**
+ * Start top-left, goal bottom-right, with the way in above the one and the way
+ * out below the other. Both ends are on the outer wall and as far apart as the
+ * grid allows, which is what the wall follower leans on.
+ */
+export function cornerEndpoints(cols: number, rows: number): Endpoints {
+  return { entrance: 0, exit: cols * rows - 1, entranceOpening: N, exitOpening: S }
+}
+
+/**
+ * Both ends dropped anywhere on the grid, only held apart: the goal is drawn
+ * from the cells at least half of the entrance's reach away, so the two never
+ * come out side by side. An end that happens to land on the border opens the
+ * outer wall on one of the sides it faces, the way the corners do; one in the
+ * middle is simply a marked cell with the outer wall closed all around.
+ */
+export function randomEndpoints(cols: number, rows: number, rng: () => number): Endpoints {
+  const size = cols * rows
+  const entrance = Math.floor(rng() * size)
+  const x = entrance % cols
+  const y = Math.floor(entrance / cols)
+  const distance = (cell: number): number =>
+    Math.abs((cell % cols) - x) + Math.abs(Math.floor(cell / cols) - y)
+
+  // The cell farthest from anywhere is always a corner
+  const reach = Math.max(x, cols - 1 - x) + Math.max(y, rows - 1 - y)
+  const far: number[] = []
+  for (let i = 0; i < size; i++) {
+    if (i !== entrance && distance(i) * 2 >= reach) far.push(i)
+  }
+  // Whichever corner sets the reach clears half of it, so the list is empty
+  // only on a grid of a single cell, which has nowhere else to put the goal.
+  const exit = far.length > 0 ? pick(far, rng) : entrance
+
+  return {
+    entrance,
+    exit,
+    entranceOpening: borderSide(cols, rows, entrance, rng),
+    exitOpening: borderSide(cols, rows, exit, rng),
+  }
+}
+
+/** One of the outer sides the cell faces, or 0 when it is not on the border. */
+function borderSide(cols: number, rows: number, cell: number, rng: () => number): number {
+  const x = cell % cols
+  const y = Math.floor(cell / cols)
+  const sides: number[] = []
+  if (y === 0) sides.push(N)
+  if (x === cols - 1) sides.push(E)
+  if (y === rows - 1) sides.push(S)
+  if (x === 0) sides.push(W)
+  return sides.length > 0 ? pick(sides, rng) : 0
 }
 
 /** Index of the neighbour in direction dir, or -1 when it falls off the grid. */
