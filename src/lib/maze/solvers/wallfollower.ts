@@ -13,6 +13,13 @@ const TURNS = [1, 0, 3, 2]
  * takes a long way round to do it.
  * The drawn route drops a cell whenever the walk doubles back, so what is left
  * is the plain route from the start to wherever the follower is now.
+ *
+ * Braiding the maze takes that guarantee away: a loop makes an island of walls,
+ * and a follower that ends up on one circles it for good. Where it stands and
+ * which way it faces is all it decides on, so meeting the same pair twice means
+ * it is repeating itself and the walk is given up as lost. Doubling back is no
+ * longer proof that the route is a detour either, so the drawn line keeps the
+ * loops it walked.
  */
 export const wallFollower: SolveAlgorithm = function* (ctx) {
   const { grid, state, start, goal } = ctx
@@ -25,6 +32,10 @@ export const wallFollower: SolveAlgorithm = function* (ctx) {
   ctx.path = route
   state[start] = SEARCHED
   ctx.expanded = 1
+
+  // Cell and facing together are the whole state of the walk
+  const walked = new Uint8Array(grid.links.length * 4)
+  walked[start * 4 + facing] = 1
 
   while (at !== goal) {
     ctx.active = [at]
@@ -40,6 +51,11 @@ export const wallFollower: SolveAlgorithm = function* (ctx) {
     }
     // A walled-in cell, which a connected maze does not contain
     if (!stepped) break
+
+    // Round in circles: nothing past this point would be new
+    const step = at * 4 + facing
+    if (walked[step]) break
+    walked[step] = 1
 
     if (state[at] === UNSEEN) {
       state[at] = SEARCHED

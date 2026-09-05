@@ -9,6 +9,11 @@ import { SEARCHED, type SolveAlgorithm } from '../types'
  * It pays no attention to where the goal is, so it ends up touching nearly
  * every cell that is not on the route -- the cost is roughly the whole maze,
  * whatever the shape.
+ *
+ * All of that rests on the maze being perfect. Braid it and a loop has no dead
+ * end to plug, so it survives the filling and leaves a fork with no way to tell
+ * which arm to take; the walk below picks one, and where that ends up nowhere
+ * the search gives up rather than going round the loop again.
  */
 export const deadEndFilling: SolveAlgorithm = function* (ctx) {
   const { grid, state, start, goal } = ctx
@@ -52,16 +57,20 @@ export const deadEndFilling: SolveAlgorithm = function* (ctx) {
 
   // Only the route is still open, so walking it is just "keep going forwards"
   const route = [start]
+  // A loop that survived the filling would otherwise be walked for ever
+  const walked = new Uint8Array(size)
+  walked[start] = 1
   let previous = -1
   let at = start
   while (at !== goal) {
     let onwards = -1
     for (const next of openNeighbors(grid, at, open)) {
-      if (filled[next] || next === previous) continue
+      if (filled[next] || next === previous || walked[next]) continue
       onwards = next
       break
     }
     if (onwards < 0) break
+    walked[onwards] = 1
     previous = at
     at = onwards
     route.push(at)
