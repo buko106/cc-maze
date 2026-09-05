@@ -9,6 +9,9 @@
   import { createRng, randomSeed } from './lib/maze/rng'
   import { getSolver, solvers } from './lib/maze/solvers'
   import type { MazeContext, SolveContext } from './lib/maze/types'
+  import { BRAID, COLS, ROWS } from './lib/settings/schema'
+  import { loadSettings, saveSettings } from './lib/settings/storage'
+  import { getSpeed, speeds } from './lib/speeds'
 
   type RunState = 'idle' | 'running' | 'paused' | 'done'
 
@@ -24,23 +27,6 @@
     running: '探索中',
     paused: '一時停止',
     done: '到達',
-  }
-
-  interface Speed {
-    readonly id: string
-    readonly name: string
-    /** Steps to take per frame. Infinity means "do not animate, just finish". */
-    readonly stepsPerFrame: number
-  }
-
-  const SPEEDS: readonly Speed[] = [
-    { id: 'slow', name: 'ゆっくり', stepsPerFrame: 2 },
-    { id: 'fast', name: '早く', stepsPerFrame: 20 },
-    { id: 'instant', name: '一気に', stepsPerFrame: Infinity },
-  ]
-
-  function getSpeed(id: string): Speed {
-    return SPEEDS.find((entry) => entry.id === id) ?? SPEEDS[0]
   }
 
   const LEGEND_GENERATE = [
@@ -63,32 +49,17 @@
   ]
 
   /**
-   * A phone held upright starts with a smaller maze: at that width 28x20 leaves
-   * cells about 10px across, too small to tell the search colours apart.
-   * Roughly square, because the strip the maze is pinned into is about as wide
-   * as it is tall -- a portrait maze would leave the sides empty.
-   * The breakpoint has to stay in step with the one in the stylesheet below.
+   * Everything the panel drives, as one object, restored from the last visit
+   * and written back on every change. What each setting means, what it may
+   * hold and what it starts at lives in lib/settings/schema.ts.
    */
-  const NARROW = window.matchMedia('(max-width: 780px)').matches
-  const INITIAL_COLS = NARROW ? 18 : 28
-  const INITIAL_ROWS = NARROW ? 18 : 20
-
-  let cols = $state(INITIAL_COLS)
-  let rows = $state(INITIAL_ROWS)
-  let algorithmId = $state(algorithms[0].id)
-  /** Where S and G go: the two corners, or a fresh pair of cells every build. */
-  let placementId = $state(placements[0].id)
-  /** Share of the dead ends to open up once the maze is carved. 0 keeps it perfect. */
-  let braidPercent = $state(0)
-  let speedId = $state('fast')
-  let solverId = $state(solvers[0].id)
-  let solveSpeedId = $state('fast')
+  let settings = $state(loadSettings())
 
   let runState = $state<RunState>('idle')
   let steps = $state(0)
   let deadEnds = $state(0)
   // Mutated in place, so $state.raw: only rebuilding it needs to trigger a redraw.
-  let maze = $state.raw(createContext(INITIAL_COLS, INITIAL_ROWS))
+  let maze = $state.raw(createMaze())
 
   let solveState = $state<RunState>('idle')
   let solveSteps = $state(0)
@@ -105,15 +76,16 @@
   // Only one of the two loops ever runs, so a single handle is enough
   let frame = 0
 
-  const algorithm = $derived(getAlgorithm(algorithmId))
-  const placement = $derived(getPlacement(placementId))
-  const solver = $derived(getSolver(solverId))
+  const algorithm = $derived(getAlgorithm(settings.algorithmId))
+  const placement = $derived(getPlacement(settings.placementId))
+  const solver = $derived(getSolver(settings.solverId))
   const solvable = $derived(runState === 'done')
-  const braided = $derived(braidPercent > 0)
+  const braided = $derived(settings.braidPercent > 0)
   /** Set while a method that leans on a perfect maze is picked on a braided one. */
   const braidNote = $derived(braided ? solver.braidNote : undefined)
-  const speed = $derived(getSpeed(speedId))
-  const solveSpeed = $derived(getSpeed(solveSpeedId))
+  const speed = $derived(getSpeed(settings.speedId))
+  const solveSpeed = $derived(getSpeed(settings.solveSpeedId))
+  const cellCount = $derived(settings.cols * settings.rows)
   const primaryLabel = $derived(
     runState === 'running'
       ? '一時停止'
@@ -136,14 +108,24 @@
           : '解く',
   )
 
+  /**
+   * Solid rock at the current size, with S and G already placed. A random
+   * placement draws a fresh pair here, so every rebuild moves them.
+   * Hoisted, because the first maze is built from it before the panel is drawn.
+   */
+  function createMaze(): MazeContext {
+    const { cols, rows } = settings
+    const place = getPlacement(settings.placementId).place
+    return createContext(cols, rows, place(cols, rows, createRng(randomSeed())))
+  }
+
   function reset(): void {
     cancelAnimationFrame(frame)
     generator = null
     runState = 'idle'
     steps = 0
     deadEnds = 0
-    // A random placement draws a new S and G here, so every rebuild moves them
-    maze = createContext(cols, rows, placement.place(cols, rows, createRng(randomSeed())))
+    maze = createMaze()
     clearSolve()
   }
 
@@ -153,7 +135,7 @@
    */
   function* buildMaze(ctx: MazeContext, rng: () => number): Generator<void, void, void> {
     yield* algorithm.run(ctx, rng)
-    yield* braid(ctx, rng, braidPercent / 100)
+    yield* braid(ctx, rng, settings.braidPercent / 100)
   }
 
   function ensureGenerator(): void {
@@ -293,19 +275,19 @@
   /** Swap the solver and, if the maze had already been searched, search again. */
   function reselectSolver(id: string): void {
     const wasActive = solveState === 'running' || solveState === 'done'
-    solverId = id
+    settings.solverId = id
     clearSolve()
     if (wasActive) startSolve()
   }
 
   /** Picking 一気に while it is still running finishes off whatever is left. */
   function selectSpeed(id: string): void {
-    speedId = id
+    settings.speedId = id
     if (runState === 'running') start()
   }
 
   function selectSolveSpeed(id: string): void {
-    solveSpeedId = id
+    settings.solveSpeedId = id
     if (solveState === 'running') startSolve()
   }
 
@@ -321,6 +303,20 @@
     reset()
     if (wasActive) start()
   }
+
+  /** Cleared once the first change has been written, and never read reactively. */
+  let untouched = true
+
+  $effect(() => {
+    // Taking a snapshot reads every field the schema knows about, so this runs
+    // again on any of them -- including the ones added to it later
+    const values = $state.snapshot(settings)
+    // The first run is the panel being set up, not a choice anyone made. Saving
+    // then would pin a visitor who touched nothing to today's defaults, and the
+    // defaults are meant to stay free to change.
+    if (!untouched) saveSettings(values)
+    untouched = false
+  })
 
   onMount(() => {
     start()
@@ -346,13 +342,13 @@
         <legend>生成アルゴリズム</legend>
         <div class="algorithms">
           {#each algorithms as entry (entry.id)}
-            <label class="algorithm" class:selected={entry.id === algorithmId}>
+            <label class="algorithm" class:selected={entry.id === settings.algorithmId}>
               <input
                 type="radio"
                 name="algorithm"
                 value={entry.id}
-                checked={entry.id === algorithmId}
-                onchange={() => reconfigure(() => (algorithmId = entry.id))}
+                checked={entry.id === settings.algorithmId}
+                onchange={() => reconfigure(() => (settings.algorithmId = entry.id))}
               />
               <span class="algorithm-name">{entry.name}</span>
               <span class="algorithm-description">{entry.description}</span>
@@ -365,12 +361,12 @@
         <legend>探索アルゴリズム</legend>
         <div class="algorithms">
           {#each solvers as entry (entry.id)}
-            <label class="algorithm" class:selected={entry.id === solverId}>
+            <label class="algorithm" class:selected={entry.id === settings.solverId}>
               <input
                 type="radio"
                 name="solver"
                 value={entry.id}
-                checked={entry.id === solverId}
+                checked={entry.id === settings.solverId}
                 onchange={() => reselectSolver(entry.id)}
               />
               <span class="algorithm-name">{entry.name}</span>
@@ -399,23 +395,25 @@
       <fieldset>
         <legend>サイズ</legend>
         <label class="slider">
-          <span class="slider-label">横 <b>{cols}</b></span>
+          <span class="slider-label">横 <b>{settings.cols}</b></span>
           <input
             type="range"
-            min="5"
-            max="90"
-            value={cols}
-            oninput={(event) => reconfigure(() => (cols = event.currentTarget.valueAsNumber))}
+            min={COLS.min}
+            max={COLS.max}
+            value={settings.cols}
+            oninput={(event) =>
+              reconfigure(() => (settings.cols = event.currentTarget.valueAsNumber))}
           />
         </label>
         <label class="slider">
-          <span class="slider-label">縦 <b>{rows}</b></span>
+          <span class="slider-label">縦 <b>{settings.rows}</b></span>
           <input
             type="range"
-            min="5"
-            max="70"
-            value={rows}
-            oninput={(event) => reconfigure(() => (rows = event.currentTarget.valueAsNumber))}
+            min={ROWS.min}
+            max={ROWS.max}
+            value={settings.rows}
+            oninput={(event) =>
+              reconfigure(() => (settings.rows = event.currentTarget.valueAsNumber))}
           />
         </label>
       </fieldset>
@@ -424,13 +422,13 @@
         <legend>スタートとゴール</legend>
         <div class="segmented">
           {#each placements as option (option.id)}
-            <label class:selected={option.id === placementId}>
+            <label class:selected={option.id === settings.placementId}>
               <input
                 type="radio"
                 name="placement"
                 value={option.id}
-                checked={option.id === placementId}
-                onchange={() => reconfigure(() => (placementId = option.id))}
+                checked={option.id === settings.placementId}
+                onchange={() => reconfigure(() => (settings.placementId = option.id))}
               />
               {option.name}
             </label>
@@ -442,15 +440,15 @@
       <fieldset>
         <legend>ループ</legend>
         <label class="slider">
-          <span class="slider-label">行き止まりをつぶす <b>{braidPercent}%</b></span>
+          <span class="slider-label">行き止まりをつぶす <b>{settings.braidPercent}%</b></span>
           <input
             type="range"
-            min="0"
-            max="100"
+            min={BRAID.min}
+            max={BRAID.max}
             step="5"
-            value={braidPercent}
+            value={settings.braidPercent}
             oninput={(event) =>
-              reconfigure(() => (braidPercent = event.currentTarget.valueAsNumber))}
+              reconfigure(() => (settings.braidPercent = event.currentTarget.valueAsNumber))}
           />
         </label>
         <p class="hint">
@@ -464,13 +462,13 @@
         <div class="speed">
           <span class="speed-label">生成</span>
           <div class="segmented">
-            {#each SPEEDS as option (option.id)}
-              <label class:selected={option.id === speedId}>
+            {#each speeds as option (option.id)}
+              <label class:selected={option.id === settings.speedId}>
                 <input
                   type="radio"
                   name="speed"
                   value={option.id}
-                  checked={option.id === speedId}
+                  checked={option.id === settings.speedId}
                   onchange={() => selectSpeed(option.id)}
                 />
                 {option.name}
@@ -481,13 +479,13 @@
         <div class="speed">
           <span class="speed-label">探索</span>
           <div class="segmented">
-            {#each SPEEDS as option (option.id)}
-              <label class:selected={option.id === solveSpeedId}>
+            {#each speeds as option (option.id)}
+              <label class:selected={option.id === settings.solveSpeedId}>
                 <input
                   type="radio"
                   name="solve-speed"
                   value={option.id}
-                  checked={option.id === solveSpeedId}
+                  checked={option.id === settings.solveSpeedId}
                   onchange={() => selectSolveSpeed(option.id)}
                 />
                 {option.name}
@@ -506,9 +504,8 @@
         <dd>{solveStatus} / {solveSteps.toLocaleString()} ステップ</dd>
         <dt>調べたセル</dt>
         <dd>
-          {expanded.toLocaleString()} / {(cols * rows).toLocaleString()}
-          {#if expanded > 0}<span class="ratio"
-              >({Math.round((expanded / (cols * rows)) * 100)}%)</span
+          {expanded.toLocaleString()} / {cellCount.toLocaleString()}
+          {#if expanded > 0}<span class="ratio">({Math.round((expanded / cellCount) * 100)}%)</span
             >{/if}
         </dd>
         <dt>経路の長さ</dt>
