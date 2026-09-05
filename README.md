@@ -35,6 +35,7 @@ npm run dev
 | svelte-check                      | 型・a11y・未使用 CSS の検査                                                                  |
 | Lefthook                          | Git フック。pre-commit で Prettier → ESLint、commit-msg で commitlint                        |
 | commitlint                        | Conventional Commits の検証                                                                  |
+| GitHub Actions                    | CI。全ブランチと PR で型チェック・lint・テスト・ビルド。`main` だけ続けて Pages へデプロイ   |
 
 Biome も検討したが、`.svelte` は `<script>` ブロックしか読めない。マークアップが見えないため
 テンプレートでしか使わない変数がすべて未使用として誤検出され、フォーマッタは script ブロックの
