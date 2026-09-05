@@ -1,9 +1,11 @@
 import {
   DONE,
+  E,
   FRINGE,
   FRINGE_BACK,
   FRONTIER,
   N,
+  S,
   SEARCHED,
   SEARCHED_BACK,
   TRAIL,
@@ -100,7 +102,7 @@ export function drawMaze(
 
   // After the route, so the S and G markers stay readable under its ends
   drawEndpoints(c, maze, cell)
-  strokeWalls(c, maze, cell, lineWidth, inner)
+  strokeWalls(c, maze, cell, lineWidth)
   fillActive(c, grid, maze.active, cell)
   if (solve) fillActive(c, grid, solve.active, cell)
 }
@@ -125,9 +127,13 @@ function strokeWalls(
   maze: MazeContext,
   cell: number,
   lineWidth: number,
-  inner: { width: number; height: number },
 ): void {
-  const { grid, entrance, exit } = maze
+  const { grid } = maze
+
+  /** The way in and the way out are the only gaps in the outer wall. */
+  const opened = (index: number, bit: number): boolean =>
+    (index === maze.entrance && maze.entranceOpening === bit) ||
+    (index === maze.exit && maze.exitOpening === bit)
 
   c.strokeStyle = PALETTE.wall
   c.lineWidth = lineWidth
@@ -135,29 +141,29 @@ function strokeWalls(
   c.beginPath()
 
   // Looking only at the north and west side of every cell draws each inner wall
-  // exactly once. The top of the start and the bottom of the goal stay open as
-  // the way in and the way out.
+  // exactly once; the east and south sides of the last column and the last row
+  // close the border off. An opening always faces off the grid, so leaving one
+  // out never takes an inner wall down with it.
   for (let i = 0; i < grid.links.length; i++) {
     const x = (i % grid.cols) * cell
     const y = Math.floor(i / grid.cols) * cell
     const links = grid.links[i]
-    if (!(links & N) && i !== entrance) {
+    if (!(links & N) && !opened(i, N)) {
       c.moveTo(x, y)
       c.lineTo(x + cell, y)
     }
-    if (!(links & W)) {
+    if (!(links & W) && !opened(i, W)) {
       c.moveTo(x, y)
       c.lineTo(x, y + cell)
     }
-  }
-
-  // The rest of the border (east and south edges)
-  c.moveTo(inner.width, 0)
-  c.lineTo(inner.width, inner.height)
-  for (let x = 0; x < grid.cols; x++) {
-    if ((grid.rows - 1) * grid.cols + x === exit) continue
-    c.moveTo(x * cell, inner.height)
-    c.lineTo((x + 1) * cell, inner.height)
+    if (i % grid.cols === grid.cols - 1 && !opened(i, E)) {
+      c.moveTo(x + cell, y)
+      c.lineTo(x + cell, y + cell)
+    }
+    if (i >= grid.links.length - grid.cols && !opened(i, S)) {
+      c.moveTo(x, y + cell)
+      c.lineTo(x + cell, y + cell)
+    }
   }
 
   c.stroke()

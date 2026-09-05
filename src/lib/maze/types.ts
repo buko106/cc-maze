@@ -24,14 +24,30 @@ export const TRAIL = 2
 /** Settled passage */
 export const DONE = 3
 
-export interface MazeContext {
-  readonly grid: Grid
-  /** Cell index -> UNVISITED | FRONTIER | TRAIL | DONE */
-  readonly state: Uint8Array
-  /** Start cell. The outer wall is left open here. */
+/**
+ * Where the two ends of the maze sit, settled before a single wall comes down.
+ * Carving never reads them: in a perfect maze exactly one path joins any two
+ * cells, so the placement only changes how the finished maze looks.
+ */
+export interface Endpoints {
+  /** Start cell. */
   readonly entrance: number
   /** Goal cell. */
   readonly exit: number
+  /**
+   * Which side of the outer wall is left open at the entrance, as a direction
+   * bit, or 0 when the cell sits away from the border. Only ever a side facing
+   * off the grid, so dropping that wall can never open an inner one.
+   */
+  readonly entranceOpening: number
+  /** The same for the exit. */
+  readonly exitOpening: number
+}
+
+export interface MazeContext extends Endpoints {
+  readonly grid: Grid
+  /** Cell index -> UNVISITED | FRONTIER | TRAIL | DONE */
+  readonly state: Uint8Array
   /** Cells this step is looking at. The renderer highlights them. */
   active: number[]
 }

@@ -8,9 +8,9 @@ const TURNS = [1, 0, 3, 2]
  * Wall follower, keeping the right hand on the wall.
  * The only method here that never looks at the maze as a whole: it knows the
  * four walls of the cell it is standing in and nothing else, and still gets
- * there. A perfect maze has no free-standing wall to circle forever, so a
- * follower that starts on the outer wall is bound to reach the goal, though it
- * takes a long way round to do it.
+ * there. A perfect maze has no free-standing wall to circle forever -- every
+ * wall hangs off the outer one -- so the follower is bound to reach the goal
+ * wherever the two ends are put, though it takes a long way round to do it.
  * The drawn route drops a cell whenever the walk doubles back, so what is left
  * is the plain route from the start to wherever the follower is now.
  *
@@ -19,13 +19,16 @@ const TURNS = [1, 0, 3, 2]
  * which way it faces is all it decides on, so meeting the same pair twice means
  * it is repeating itself and the walk is given up as lost. Doubling back is no
  * longer proof that the route is a detour either, so the drawn line keeps the
- * loops it walked.
+ * loops it walked. Starting from the top-left corner it still hugs the outer
+ * wall all the way round and passes the goal in the opposite one; started from
+ * a cell dropped at random it usually ends up on an island instead.
  */
 export const wallFollower: SolveAlgorithm = function* (ctx) {
   const { grid, state, start, goal } = ctx
 
   let at = start
-  // Entering through the opening in the top wall means heading south
+  // Heading south: that is walking in through the opening above the top-left
+  // corner, and as good a first step as any from a cell anywhere else
   let facing = 2
 
   const route = [start]
