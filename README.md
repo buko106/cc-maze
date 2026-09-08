@@ -8,6 +8,7 @@
 - **探索**: 深さ優先探索 (DFS) / 幅優先探索 (BFS) / A\* / 双方向 BFS / 右手法（壁伝い） / 行き止まり埋め
 - **配置**: スタートとゴールを左上・右下に固定するか、生成のたびにランダムな 2 セルへ置く
 - **ループ**: 生成後に行き止まりを開けて輪を作る（0〜100%）。完全迷路でなくなると手法ごとに違う経路を返す
+- **保存**: 選んだ設定はブラウザに残り、次に開いたときも同じ設定から始まる
 
 生成が終わると探索ボタンが有効になる。生成と探索はそれぞれ独立に手法と速度を選べるので、
 同じ迷路を別の手法で解き直して見比べられる。
@@ -56,6 +57,8 @@ FC_SEED=$RANDOM npm test   # 固定シード以外の入力も試す
 テストランナーは **Vitest**。Vite プロジェクトなので `vite.config.ts` をそのまま共有でき、変換や
 エイリアスの設定が二重にならない（Svelte 公式も Vite を使うなら Vitest を挙げている）。対象は
 `src/lib/maze/` の純粋な TypeScript なので `environment` は `node` で、DOM も jsdom も要らない。
+`src/lib/settings/` も同じで、`localStorage` そのものではなく `getItem` / `setItem` だけを持つ
+差し替え可能な入れ物を読み書きするので、node のままで「保存できない環境」まで試せる。
 
 #### 乱数が絡むテストの書き方
 
@@ -73,6 +76,7 @@ FC_SEED=$RANDOM npm test   # 固定シード以外の入力も試す
 | 配置   | S と G は重ならない・行ける最遠距離の半分以上離れる・外壁を開けるのは端だけ |
 | ループ | 壁は開くだけで閉じない・連結は保たれる・1 ステップ = 1 枚の壁               |
 | 探索   | 経路が壁を越えない・S に始まり G に終わる・完全迷路ならどの手法も同じ経路   |
+| 設定   | 保存されていた中身が何であれ、全項目がその項目の検証を通る値で返る          |
 
 **3. 入力は fast-check に振らせ、シードは固定する。** サイズ・シード・ループ率を property-based
 testing で振りつつ、`vitest.setup.ts` で `fc.configureGlobal({ seed })` を固定する。CI でも手元でも
@@ -138,7 +142,7 @@ export type SolveAlgorithm = (ctx: SolveContext) => Generator<void, void, void>
 ```ts
 function* buildMaze(ctx: MazeContext, rng: () => number) {
   yield* algorithm.run(ctx, rng)
-  yield* braid(ctx, rng, braidPercent / 100)
+  yield* braid(ctx, rng, settings.braidPercent / 100)
 }
 ```
 
@@ -233,6 +237,59 @@ BFS・A\*・双方向 BFS は最短を返し続けるが、DFS と右手法は�
 外壁を伝ったまま反対の角へ着くので 1,620 通りで一度も失敗しなかったが、ランダム配置では 1,074 通り
 （66%）が「到達できず」に終わった。行き止まり埋めは元から配置に関係なく、76% が 80% になった程度。
 
+## 設定の保存
+
+パネルで選んだ設定は `localStorage`（キーは `cc-maze:settings`）に入り、次に開いたときも同じ設定から
+始まる。保存するのは生成手法・探索手法・S と G の置き方・サイズ・ループ率・速度 2 つ。迷路そのものや
+生成の進捗は保存しない。開くたびに新しい迷路を作る。
+
+設定は増える。**設定を 1 つ足したときに、前のバージョンで保存した値が読めなくなる**のがいちばん
+避けたい壊れ方なので、そこを軸に組んである。
+
+**1 か所に宣言する。** `settings/schema.ts` に、設定 1 つにつき 1 行。既定値と「保存された値の読み方」
+を持つ。
+
+```ts
+export const SETTINGS = {
+  algorithmId: choice(ids(algorithms), algorithms[0].id),
+  cols: integer(COLS, NARROW ? 18 : 28),
+  braidPercent: integer(BRAID, 0),
+  // ...
+} satisfies SettingsSchema
+```
+
+型 `Settings` はこの表から導出されるので、1 行足せば App 側の型もそのぶん増える。スライダーの
+`min` / `max` も同じ `COLS` / `ROWS` / `BRAID` を読むため、UI が受け付ける値と保存時に通る値がずれない。
+保存も復元もこの一覧を回るだけで、項目名を書いた場所は他にない。
+
+**項目ごとに読む。** 保存された JSON は「信用できない `unknown` の袋」として扱い、項目ごとに検証を
+通す。読めない値はその項目だけが既定値に戻り、他は生き残る。
+
+| 保存されていた中身             | 読み込み結果                     |
+| ------------------------------ | -------------------------------- |
+| 知らないキー                   | 捨てる                           |
+| 足したばかりの設定のキーがない | その項目だけ既定値               |
+| 消えた手法の id                | その項目だけ既定値、他はそのまま |
+| 範囲外のサイズ（`cols: 9999`） | 範囲の端へ丸める（90）           |
+| JSON として壊れている・別の形  | 全部既定値                       |
+
+つまり**項目を足す・消す・レジストリから手法を 1 つ外す、のどれもバージョンを上げずに済む**。
+`SETTINGS_VERSION` を上げるのは「同じキーの意味が変わった」ときだけで、そのときは保存済みの値を
+まとめて捨てる。誰も選んでいない設定を復元するくらいなら初期状態から始める方がよい。
+
+**初回訪問では書かない。** 保存するのは設定を最初に変えたときから。何も触っていない人の
+localStorage に既定値を焼き付けると、あとで既定値を変えてもその人には届かなくなる。
+
+読み書きはどちらも `try` で囲ってある。Safari のプライベートモードや Cookie を切った環境では
+`localStorage` に触るだけで例外が飛ぶが、設定が残らないだけでアプリはそのまま動く。
+
+### 設定を足す
+
+1. `settings/schema.ts` の `SETTINGS` に 1 行足す
+2. `App.svelte` に `settings.<新しい項目>` を読み書きするコントロールを置く
+
+生成・探索の手法を足したときは、id の一覧をレジストリから作っているので `settings/` は触らなくてよい。
+
 ## ディレクトリ
 
 ```
@@ -240,6 +297,12 @@ src/
   App.svelte              UI と再生ループ（rAF）
   lib/
     MazeCanvas.svelte     canvas のサイズ追従と再描画の窓口
+    speeds.ts             再生速度の一覧（レジストリ）
+    settings/
+      fields.ts           設定 1 項目の型と、検証つきの項目ヘルパ
+      schema.ts           保存する設定の一覧（ここに 1 行足すだけ）
+      storage.ts          localStorage への読み書き（項目ごとに検証して復元）
+      settings.test.ts    テスト
     maze/
       types.ts            Grid / MazeContext / SolveContext と 2 つのアルゴリズム型
       grid.ts             セル・方向・リンク操作、S と G の置き方、探索用の近傍と経路復元
@@ -271,6 +334,10 @@ src/
 `createContext` / `link` と探索用の `createSolveContext` / `openNeighbors` / `tracePath` を並べている。
 `cornerEndpoints` / `randomEndpoints` も盤面の座標を扱う話なのでここに置き、`placements.ts` は
 `algorithms/index.ts` などと同じく UI に出す一覧だけを持つ。
+
+`settings/` と `speeds.ts` が `maze/` の外にあるのは、迷路の理屈を何も知らないため。速度は 1 フレームに
+進めるステップ数の話で、設定はどの選択肢を覚えておくかの話でしかない。逆向きの依存はあり、
+`settings/schema.ts` は各レジストリを読んで「保存してよい id」の一覧を作る。
 
 ## アルゴリズムを足す
 
