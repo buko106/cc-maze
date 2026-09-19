@@ -1,6 +1,6 @@
 import { algorithms } from '../maze/algorithms'
 import { placements } from '../maze/placements'
-import { solvers } from '../maze/solvers'
+import { DEFAULT_SOLVER_ID, solvers } from '../maze/solvers'
 import { DEFAULT_SPEED_ID, speeds } from '../speeds'
 import { choice, integer, type Range, type SettingsOf, type SettingsSchema } from './fields'
 
@@ -31,7 +31,7 @@ function ids(entries: readonly { readonly id: string }[]): readonly string[] {
  */
 export const SETTINGS = {
   algorithmId: choice(ids(algorithms), algorithms[0].id),
-  solverId: choice(ids(solvers), solvers[0].id),
+  solverId: choice(ids(solvers), DEFAULT_SOLVER_ID),
   placementId: choice(ids(placements), placements[0].id),
   cols: integer(COLS, NARROW ? 18 : 28),
   rows: integer(ROWS, NARROW ? 18 : 20),

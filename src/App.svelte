@@ -3,11 +3,12 @@
   import MazeCanvas from './lib/MazeCanvas.svelte'
   import { algorithms, getAlgorithm } from './lib/maze/algorithms'
   import { braid, countDeadEnds } from './lib/maze/braid'
-  import { createContext, createSolveContext } from './lib/maze/grid'
+  import { createContext, createSolveContext, type Direction } from './lib/maze/grid'
   import { getPlacement, placements } from './lib/maze/placements'
   import { PALETTE } from './lib/maze/renderer'
   import { createRng, randomSeed } from './lib/maze/rng'
   import { getSolver, solvers } from './lib/maze/solvers'
+  import { begin, dragTo, press, step } from './lib/maze/trace'
   import type { MazeContext, SolveContext } from './lib/maze/types'
   import { BRAID, COLS, ROWS } from './lib/settings/schema'
   import { loadSettings, saveSettings } from './lib/settings/storage'
@@ -79,7 +80,11 @@
   const algorithm = $derived(getAlgorithm(settings.algorithmId))
   const placement = $derived(getPlacement(settings.placementId))
   const solver = $derived(getSolver(settings.solverId))
+  // Nothing to run: the person traces the route on the maze instead
+  const byHand = $derived(!solver.run)
   const solvable = $derived(runState === 'done')
+  // Once the line reaches the goal it stays as it is until it is cleared
+  const traceable = $derived(byHand && solvable && solveState !== 'done')
   const braided = $derived(settings.braidPercent > 0)
   /** Set while a method that leans on a perfect maze is picked on a braided one. */
   const braidNote = $derived(braided ? solver.braidNote : undefined)
@@ -98,14 +103,19 @@
   const solveStatus = $derived(
     solveState === 'done' && !solveFound ? '到達できず' : SOLVE_STATUS_LABEL[solveState],
   )
+  // By hand there is nothing to pause: the button only ever starts the line over
   const solveLabel = $derived(
-    solveState === 'running'
-      ? '一時停止'
-      : solveState === 'paused'
-        ? '再開'
-        : solveState === 'done'
-          ? '解き直す'
-          : '解く',
+    byHand
+      ? solveState === 'idle'
+        ? '解く'
+        : '解き直す'
+      : solveState === 'running'
+        ? '一時停止'
+        : solveState === 'paused'
+          ? '再開'
+          : solveState === 'done'
+            ? '解き直す'
+            : '解く',
   )
 
   /**
@@ -204,7 +214,7 @@
 
   function ensureSolver(): void {
     if (solveState === 'done') clearSolve()
-    if (!solveGenerator) {
+    if (!solveGenerator && solver.run) {
       solve = createSolveContext(maze)
       solveGenerator = solver.run(solve)
     }
@@ -239,7 +249,7 @@
   }
 
   function startSolve(): void {
-    if (!solvable) return
+    if (!solvable || byHand) return
     cancelAnimationFrame(frame)
     if (solveSpeed.stepsPerFrame === Infinity) {
       completeSolve()
@@ -257,7 +267,7 @@
 
   /** Run the rest of the search in one go */
   function completeSolve(): void {
-    if (!solvable) return
+    if (!solvable || byHand) return
     cancelAnimationFrame(frame)
     ensureSolver()
     while (!advanceSolve()) {
@@ -268,16 +278,64 @@
   }
 
   function toggleSolve(): void {
-    if (solveState === 'running') pauseSolve()
+    if (byHand) startTrace()
+    else if (solveState === 'running') pauseSolve()
     else startSolve()
   }
 
-  /** Swap the solver and, if the maze had already been searched, search again. */
+  /**
+   * Swap the solver and, if the maze had already been searched, search again.
+   * Switching to solving by hand only clears the maze: the line waits for the pen.
+   */
   function reselectSolver(id: string): void {
     const wasActive = solveState === 'running' || solveState === 'done'
     settings.solverId = id
     clearSolve()
     if (wasActive) startSolve()
+  }
+
+  /** Throw away the line so far, put the pen on the start and hand the keyboard to the maze. */
+  function startTrace(): void {
+    if (!solvable) return
+    clearSolve()
+    const ctx = createSolveContext(maze)
+    begin(ctx)
+    solve = ctx
+    solveState = 'running'
+    syncSolveStats()
+    view?.focus()
+  }
+
+  /** The pen went down on the maze. Returns whether to follow the drag that comes after. */
+  function pressCell(cell: number): boolean {
+    if (!traceable) return false
+    const ctx = solve ?? createSolveContext(maze)
+    const moves = press(ctx, cell)
+    if (moves === null) return false
+    solve = ctx
+    traced(moves)
+    return true
+  }
+
+  function dragCell(cell: number): void {
+    if (!traceable || !solve) return
+    const moves = dragTo(solve, cell)
+    if (moves > 0) traced(moves)
+  }
+
+  function stepPen(dir: Direction): void {
+    if (!traceable) return
+    solve ??= createSolveContext(maze)
+    traced(step(solve, dir))
+  }
+
+  /** Count the moves the pen just made and put them on screen. */
+  function traced(moves: number): void {
+    if (!solve) return
+    solveSteps += moves
+    solveState = solve.found ? 'done' : 'running'
+    syncSolveStats()
+    view?.redraw()
   }
 
   /** Picking 一気に while it is still running finishes off whatever is left. */
@@ -328,7 +386,15 @@
   <!-- The maze comes first so that stacking it above the panel on a phone takes
        no visual reordering, and the reading order still matches the screen -->
   <main class="stage">
-    <MazeCanvas bind:this={view} {maze} {solve} />
+    <MazeCanvas
+      bind:this={view}
+      {maze}
+      {solve}
+      {traceable}
+      onpress={pressCell}
+      ondrag={dragCell}
+      onstep={stepPen}
+    />
   </main>
 
   <aside class="panel">
@@ -476,7 +542,8 @@
             {/each}
           </div>
         </div>
-        <div class="speed">
+        <!-- Solving by hand goes as fast as the pen does -->
+        <div class="speed" class:disabled={byHand}>
           <span class="speed-label">探索</span>
           <div class="segmented">
             {#each speeds as option (option.id)}
@@ -486,6 +553,7 @@
                   name="solve-speed"
                   value={option.id}
                   checked={option.id === settings.solveSpeedId}
+                  disabled={byHand}
                   onchange={() => selectSolveSpeed(option.id)}
                 />
                 {option.name}
@@ -719,6 +787,18 @@
 
   .segmented label:hover {
     border-color: #3a4356;
+  }
+
+  .speed.disabled {
+    opacity: 0.4;
+  }
+
+  .speed.disabled label {
+    cursor: default;
+  }
+
+  .speed.disabled label:hover:not(.selected) {
+    border-color: var(--border);
   }
 
   .segmented label.selected {

@@ -2,7 +2,7 @@ import fc from 'fast-check'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { algorithms } from '../maze/algorithms'
 import { placements } from '../maze/placements'
-import { solvers } from '../maze/solvers'
+import { DEFAULT_SOLVER_ID, solvers } from '../maze/solvers'
 import { speeds } from '../speeds'
 import { choice, integer, type SettingsSchema } from './fields'
 import { COLS, ROWS, SETTINGS, type Settings } from './schema'
@@ -191,10 +191,10 @@ describe('the app schema', () => {
     }
   })
 
-  it('defaults to the first entry of each registry, at a size the sliders can reach', () => {
+  it('defaults to where each registry starts, at a size the sliders can reach', () => {
     const settings = readSettings(SETTINGS, null)
     expect(settings.algorithmId).toBe(algorithms[0].id)
-    expect(settings.solverId).toBe(solvers[0].id)
+    expect(settings.solverId).toBe(DEFAULT_SOLVER_ID)
     expect(settings.placementId).toBe(placements[0].id)
     expect(speeds.map((entry) => entry.id)).toContain(settings.speedId)
     expect(settings.cols).toBeGreaterThanOrEqual(COLS.min)

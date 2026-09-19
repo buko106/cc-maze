@@ -45,6 +45,37 @@ export interface Viewport {
   height: number
 }
 
+/** Where the grid lands on the canvas. All lengths are in CSS pixels. */
+export interface Layout {
+  /** Side of one cell */
+  readonly cell: number
+  readonly lineWidth: number
+  /** Gap between the canvas edge and the grid: half a line width, so the outer walls are not clipped in half */
+  readonly pad: number
+  /** The whole canvas */
+  readonly width: number
+  readonly height: number
+}
+
+/**
+ * Fit the grid into the space available. Drawing and working out which cell
+ * the pointer is over both go through this, so the two can never disagree.
+ */
+export function measure(grid: Grid, viewport: Viewport): Layout {
+  const cell = Math.max(
+    2,
+    Math.floor(Math.min((viewport.width - 4) / grid.cols, (viewport.height - 4) / grid.rows)),
+  )
+  const lineWidth = cell >= 8 ? 2 : 1
+  return {
+    cell,
+    lineWidth,
+    pad: lineWidth / 2,
+    width: cell * grid.cols + lineWidth,
+    height: cell * grid.rows + lineWidth,
+  }
+}
+
 /**
  * Paint a MazeContext straight onto the canvas. There is no partial redraw --
  * every frame repaints everything.
@@ -58,16 +89,7 @@ export function drawMaze(
   solve?: SolveContext | null,
 ): void {
   const { grid } = maze
-  const cell = Math.max(
-    2,
-    Math.floor(Math.min((viewport.width - 4) / grid.cols, (viewport.height - 4) / grid.rows)),
-  )
-  const lineWidth = cell >= 8 ? 2 : 1
-  const inner = { width: cell * grid.cols, height: cell * grid.rows }
-  // Half a line width of padding, so the outer walls are not clipped in half
-  const pad = lineWidth / 2
-  const cssWidth = inner.width + lineWidth
-  const cssHeight = inner.height + lineWidth
+  const { cell, lineWidth, pad, width: cssWidth, height: cssHeight } = measure(grid, viewport)
 
   const dpr = window.devicePixelRatio || 1
   const pixelWidth = Math.round(cssWidth * dpr)

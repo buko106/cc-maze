@@ -16,11 +16,24 @@ export interface SolverEntry {
    * being perfect. Shown as a warning while the maze is braided.
    */
   readonly braidNote?: string
-  readonly run: SolveAlgorithm
+  /**
+   * The search. Left out for solving by hand: there the person traces the route
+   * on the maze, and trace.ts fills in the SolveContext a search would have.
+   */
+  readonly run?: SolveAlgorithm
 }
+
+/** An entry that runs a search of its own, which is every one but solving by hand. */
+export type SearchEntry = SolverEntry & { readonly run: SolveAlgorithm }
 
 /** Adding one line here is enough to add a choice to the UI. */
 export const solvers: readonly SolverEntry[] = [
+  {
+    id: 'by-hand',
+    name: '自分で解く',
+    description:
+      'S からドラッグして線を伸ばし、G を目指す。来た道を戻ると線が縮み、線の途中を押すとそこから描き直せる。矢印キーでも進める。',
+  },
   {
     id: 'dfs',
     name: '深さ優先探索 (DFS)',
@@ -68,6 +81,18 @@ export const solvers: readonly SolverEntry[] = [
     run: deadEndFilling,
   },
 ]
+
+/** The ones with a search to run, for everything that has to run one. */
+export const searches: readonly SearchEntry[] = solvers.filter(
+  (entry): entry is SearchEntry => entry.run !== undefined,
+)
+
+/**
+ * What the app starts on, and what a stored id that no longer exists falls back
+ * to. A search rather than solving by hand, so that 解く on a first visit sets
+ * one running, the way the page has always opened.
+ */
+export const DEFAULT_SOLVER_ID = 'dfs'
 
 export function getSolver(id: string): SolverEntry {
   return solvers.find((entry) => entry.id === id) ?? solvers[0]
