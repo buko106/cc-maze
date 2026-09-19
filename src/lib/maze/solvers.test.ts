@@ -2,7 +2,7 @@ import fc from 'fast-check'
 import { describe, expect, it } from 'vitest'
 import { algorithms } from './algorithms'
 import { DIRS, link } from './grid'
-import { getSolver, solvers } from './solvers'
+import { DEFAULT_SOLVER_ID, getSolver, searches, solvers } from './solvers'
 import { wallFollower } from './solvers/wallfollower'
 import {
   SOLVE_CAP,
@@ -27,7 +27,7 @@ const OPTIMAL = ['bfs', 'astar', 'bidirectional']
 
 const maze = (options: BuildOptions = {}) => buildMaze(algorithms[0].run, options)
 
-describe.each(solvers.map((entry) => [entry.id, entry] as const))('%s', (id, entry) => {
+describe.each(searches.map((entry) => [entry.id, entry] as const))('%s', (id, entry) => {
   it('walks a perfect maze from S to G, wherever the two are', () => {
     fc.assert(
       fc.property(
@@ -183,7 +183,7 @@ describe.each(solvers.map((entry) => [entry.id, entry] as const))('%s', (id, ent
  * shows up as a failing test rather than as a hung suite.
  */
 describe('the methods that lean on a perfect maze', () => {
-  const perfectOnly = solvers.filter((entry) => entry.braidNote !== undefined)
+  const perfectOnly = searches.filter((entry) => entry.braidNote !== undefined)
 
   it('are the wall follower and dead-end filling', () => {
     expect(perfectOnly.map((entry) => entry.id)).toEqual(['wall-follower', 'dead-end'])
@@ -273,5 +273,16 @@ describe('the registry', () => {
   it('falls back to the first entry for an id it does not know', () => {
     expect(getSolver(solvers[3].id)).toBe(solvers[3])
     expect(getSolver('no-such-solver')).toBe(solvers[0])
+  })
+
+  /** Everything above runs the searches; the one entry without a search is covered in trace.test.ts. */
+  it('has a search to run on every entry but solving by hand', () => {
+    expect(solvers.filter((entry) => !entry.run).map((entry) => entry.id)).toEqual(['by-hand'])
+    expect(searches).toHaveLength(solvers.length - 1)
+  })
+
+  it('starts on a search, so a first visit can set one running straight away', () => {
+    expect(getSolver(DEFAULT_SOLVER_ID).id).toBe(DEFAULT_SOLVER_ID)
+    expect(getSolver(DEFAULT_SOLVER_ID).run).toBeDefined()
   })
 })
