@@ -3,8 +3,7 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "types": []
+    "types": ["vitest/globals", "node"]
   },
-  "include": ["src/**/*.ts"],
-  "exclude": ["src/**/*.spec.ts", "src/test-setup.ts", "src/lib/maze/test-utils.ts"]
+  "include": ["src/**/*.d.ts", "src/**/*.spec.ts", "src/test-setup.ts"]
 }

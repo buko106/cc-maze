@@ -1,6 +1,7 @@
 # 迷路ジェネレーター
 
-迷路を作るところと、解くところをそのまま眺められる WEB アプリ。Vite + Svelte 5 (runes) + TypeScript。
+迷路を作るところと、解くところをそのまま眺められる WEB アプリ。Angular 22（standalone コンポーネント・
+signals・Signal Forms・zoneless）+ TypeScript。
 
 **公開先: https://www.buko106.tokyo/cc-maze/**（`main` への push で GitHub Pages へ自動デプロイ）
 
@@ -18,34 +19,35 @@
 
 ```bash
 npm install
-npm run dev
+npm start
 ```
 
-| コマンド         | 内容                                         |
-| ---------------- | -------------------------------------------- |
-| `npm run dev`    | 開発サーバー (http://localhost:5173)         |
-| `npm run build`  | 本番ビルド → `dist/`                         |
-| `npm run check`  | svelte-check + tsc による型チェック          |
-| `npm test`       | Vitest（`test:watch` で監視）                |
-| `npm run lint`   | ESLint（`lint:fix` で自動修正）              |
-| `npm run format` | Prettier で整形（`format:check` で検査のみ） |
+Angular CLI 22 は Node.js 22.22.3 以上か 24.15 以上を要求する（`.nvmrc` は 24、CI も 24）。
+
+| コマンド         | 内容                                                             |
+| ---------------- | ---------------------------------------------------------------- |
+| `npm start`      | 開発サーバー (http://localhost:4200)                             |
+| `npm run build`  | 本番ビルド → `dist/`（base href は公開先に合わせて `/cc-maze/`） |
+| `npm run check`  | ngc + tsc による型チェック（テンプレートの中まで）               |
+| `npm test`       | `ng test` で Vitest（`test:watch` で監視）                       |
+| `npm run lint`   | ESLint（`lint:fix` で自動修正）                                  |
+| `npm run format` | Prettier で整形（`format:check` で検査のみ）                     |
 
 ## 開発ツール
 
-| ツール                            | 担当                                                                                         |
-| --------------------------------- | -------------------------------------------------------------------------------------------- |
-| Vitest + fast-check               | テスト。`vite.config.ts` を共有するので設定が二重にならない                                  |
-| Prettier + prettier-plugin-svelte | 整形。`.svelte` はマークアップ・script・style すべて                                         |
-| ESLint + eslint-plugin-svelte     | lint。テンプレートまで構文解析するので、マークアップでしか使わない変数を未使用と誤検出しない |
-| svelte-check                      | 型・a11y・未使用 CSS の検査                                                                  |
-| Lefthook                          | Git フック。pre-commit で Prettier → ESLint、commit-msg で commitlint                        |
-| commitlint                        | Conventional Commits の検証                                                                  |
-| GitHub Actions                    | CI。全ブランチと PR で型チェック・lint・テスト・ビルド。`main` だけ続けて Pages へデプロイ   |
+| ツール                         | 担当                                                                                        |
+| ------------------------------ | ------------------------------------------------------------------------------------------- |
+| Angular CLI (`@angular/build`) | ビルドと開発サーバー。esbuild ベースの application builder                                  |
+| Vitest + fast-check            | テスト。`ng test`（`@angular/build:unit-test`）がアプリと同じビルド設定で Vitest を走らせる |
+| ngc (`@angular/compiler-cli`)  | 型チェック。strict templates なのでテンプレート内の式まで型を検査する                       |
+| ESLint + angular-eslint        | lint。`.html` のテンプレートも構文解析し、アクセシビリティのルールも掛ける                  |
+| Prettier                       | 整形。`.html` は Angular のテンプレートとして（`parser: angular`）整形する                  |
+| Lefthook                       | Git フック。pre-commit で Prettier → ESLint、commit-msg で commitlint                       |
+| commitlint                     | Conventional Commits の検証                                                                 |
+| GitHub Actions                 | CI。全ブランチと PR で型チェック・lint・テスト・ビルド。`main` だけ続けて Pages へデプロイ  |
 
-Biome も検討したが、`.svelte` は `<script>` ブロックしか読めない。マークアップが見えないため
-テンプレートでしか使わない変数がすべて未使用として誤検出され、フォーマッタは script ブロックの
-インデントを剥がして Svelte 標準の整形と衝突する。このプロジェクトは `.svelte` が中心なので、
-Svelte 公式アドオン（`sv add prettier eslint`）と同じ構成に一本化した。
+構成は `ng new`（Angular 22）と `ng add angular-eslint` が作るものに合わせてある。TypeScript の
+設定（`noPropertyAccessFromIndexSignature` など）も CLI の既定のまま。
 
 `npm install` すると `prepare` スクリプトが `lefthook install` を走らせ、フックが有効になる。
 
@@ -57,11 +59,13 @@ npm run test:watch
 FC_SEED=$RANDOM npm test   # 固定シード以外の入力も試す
 ```
 
-テストランナーは **Vitest**。Vite プロジェクトなので `vite.config.ts` をそのまま共有でき、変換や
-エイリアスの設定が二重にならない（Svelte 公式も Vite を使うなら Vitest を挙げている）。対象は
-`src/lib/maze/` の純粋な TypeScript なので `environment` は `node` で、DOM も jsdom も要らない。
-`src/lib/settings/` も同じで、`localStorage` そのものではなく `getItem` / `setItem` だけを持つ
-差し替え可能な入れ物を読み書きするので、node のままで「保存できない環境」まで試せる。
+テストランナーは **Vitest**。Angular 21 から CLI の既定になった `@angular/build:unit-test` を
+使うので、テストもアプリと同じビルド設定で束ねられ、設定が二重にならない。環境は jsdom。
+
+`src/lib/` の純粋な TypeScript は DOM に触らないので、Angular のことを何も知らないまま検査できる。
+`src/lib/settings/` も、`localStorage` そのものではなく `getItem` / `setItem` だけを持つ差し替え
+可能な入れ物を読み書きするので、「保存できない環境」まで試せる。`src/app/` のサービスと
+コンポーネントは `TestBed` で組み立てて検査する（下の「画面のテスト」）。
 
 #### 乱数が絡むテストの書き方
 
@@ -83,7 +87,7 @@ FC_SEED=$RANDOM npm test   # 固定シード以外の入力も試す
 | 設定   | 保存されていた中身が何であれ、全項目がその項目の検証を通る値で返る          |
 
 **3. 入力は fast-check に振らせ、シードは固定する。** サイズ・シード・ループ率を property-based
-testing で振りつつ、`vitest.setup.ts` で `fc.configureGlobal({ seed })` を固定する。CI でも手元でも
+testing で振りつつ、`src/test-setup.ts`（`angular.json` の `setupFiles`）で `fc.configureGlobal({ seed })` を固定する。CI でも手元でも
 同じ 30 通りが回るので、赤は赤のままになる。別の入力を試したいときは `FC_SEED` を渡す。失敗すると
 シードと**縮小された反例**（「5×5・シード 12345 で落ちる」など）が出るので、それを回帰テストに残せる。
 
@@ -100,13 +104,34 @@ testing で振りつつ、`vitest.setup.ts` で `fc.configureGlobal({ seed })` �
 などをそれぞれ入れて、すべてテストが落ちることを確認している。「自分で解く」も同じで、壁の判定を
 外す・線を切り戻さない・ゴールで止めない・飛ばしたマスを補わない、など 10 通りを入れてすべて落ちた。
 
+#### 画面のテスト
+
+`src/app/` は `TestBed` で組み立てる。zone.js がないので、テストも本番と同じ zoneless で動く。
+変更検知を待つのは `fixture.whenStable()`、設定を変えたあとの `effect` を流すのは `TestBed.tick()`。
+
+jsdom はレイアウトをしないので `ResizeObserver` がなく、canvas の 2D コンテキストも返さない。
+canvas のテストは `ResizeObserver` を差し替えて「使える広さ」をテスト側から渡し、描画は canvas の
+大きさを決めるところまでを確かめる。なぞる操作は、セルの中心にポインターを置いたイベントを
+流して、セッションに渡るセルの並びを見る。
+
+| 対象            | 確かめること                                                                             |
+| --------------- | ---------------------------------------------------------------------------------------- |
+| `SettingsStore` | 何も触らなければ保存しない・変えたら保存する・前回の値から始まる                         |
+| `MazeSession`   | 速度ぶんずつ進む・形を変えたら作り直す・止めていたら作り直すだけ・手法を変えたら解き直す |
+| `MazeCanvas`    | 広さに合わせる・速くなぞっても通ったセルを順に渡す・断られた線は追わない                 |
+| `App`           | G / S のショートカット・ラジオが設定に書かれる・スライダーの範囲・キーボードが迷路に移る |
+
+こちらもわざと壊して確かめた。形を変えても作り直さない・手法を変えても解き直さない・1/4 セル刻みを
+粗くする・なぞり始めに迷路へフォーカスを移さない・初回訪問で保存する・手で解くときに探索の速度を
+無効にしない、の 6 通りすべてで落ちる。
+
 ### 言語の使い分け
 
 **コード内コメントとコミットメッセージは英語で書く。**
 
 | 対象                                                       | 言語   |
 | ---------------------------------------------------------- | ------ |
-| コード内コメント（`.ts` / `.svelte` のコメント、JSDoc）    | 英語   |
+| コード内コメント（`.ts` / `.html` / `.css`、JSDoc）        | 英語   |
 | コミットメッセージ（type / scope / subject / body すべて） | 英語   |
 | UI に表示される文字列（アルゴリズム名・ラベル・凡例など）  | 日本語 |
 | ドキュメント（README.md / CLAUDE.md）                      | 日本語 |
@@ -145,9 +170,9 @@ export type SolveAlgorithm = (ctx: SolveContext) => Generator<void, void, void>
 呼び出し側からは 1 本のジェネレータに見え、アニメーションのループは 2 段階で作られていることを知らずに済む。
 
 ```ts
-function* buildMaze(ctx: MazeContext, rng: () => number) {
-  yield* algorithm.run(ctx, rng)
-  yield* braid(ctx, rng, settings.braidPercent / 100)
+private *build(ctx: MazeContext, rng: () => number): Steps {
+  yield* this.store.algorithm().run(ctx, rng)
+  yield* braid(ctx, rng, this.settings().braidPercent / 100)
 }
 ```
 
@@ -164,6 +189,32 @@ function* buildMaze(ctx: MazeContext, rng: () => number) {
 生成の進捗 (`MazeContext.state`) と探索の進捗 (`SolveContext.state`) は別々の配列。同じ画面に重ねて描いても、色の意味が混ざらない。
 
 描画は Canvas 2D。差分描画はせず毎フレーム全部描き直すが、同じ色のセルをまとめて塗り、壁は 1 本の Path に集約して一度だけ `stroke()` するので、6,300 セル（90×70）でも 1 フレームに収まる。経路はセル中心を結ぶ 1 本の太いラインとして、壁より先に描く。
+
+### Angular での組み立て
+
+迷路のロジック（`src/lib/`）は Angular を一切 import しない。Svelte 版から移したときもここは
+中身を変えずに持ってきて、画面の側（`src/app/`）だけを Angular で書き直した。
+
+**zoneless。** zone.js は読み込まない（Angular 21 からの既定）。変更検知が走るきっかけは signal の
+書き換えとテンプレートのイベントだけで、`requestAnimationFrame` の再生ループも zone の外に
+逃がす必要がない。ループは 1 フレームぶん進めたら signal を書き換えるだけで、描き直しは Angular
+が次の描画でまとめて行う。コンポーネントは Angular 22 の既定どおり OnPush。
+
+**状態はサービスの signal。** 迷路と探索の状態、再生ループは `MazeSession`（`@Service()`）が持ち、
+コンポーネントは読むだけ・ボタンから呼ぶだけの薄い見た目になっている。ただしアルゴリズムは
+`MazeContext` / `SolveContext` をその場で書き換えるので、それを入れた signal 自体は変わらない。
+代わりに書き換えるたびに `revision` を 1 つ進め、中身を読む側（調べたセルの数、canvas）はそれも
+読んでおく。canvas の描画は `afterRenderEffect` の `write` フェーズに置いてあり、迷路・探索・
+`revision`・広さのどれが変わっても描き直す。
+
+**設定は Signal Forms。** 設定パネルは `form()` を `SettingsStore` の signal に直接つないでいて、
+ラジオやスライダーを動かすとそのまま設定が書き換わる。スライダーの範囲と「自分で解くあいだは
+探索の速度を選べない」はフォームのスキーマ（`min()` / `max()` / `disabled()`）に書いてあり、
+`[formField]` が `<input>` の `min` / `max` / `disabled` へ反映する。
+
+設定が変わったときの反応（形が変われば迷路を作り直す、手法が変われば解き直す、速度が変われば
+ループを掛け直す）は `MazeSession` の中で `effect` にしてある。パネルは「何が起きるか」を知らずに
+設定を書くだけでよい。どの `effect` も最初の 1 回（画面を組み立てただけの値）では何もしない。
 
 ### 生成手法の見どころ
 
@@ -266,7 +317,7 @@ BFS・A\*・双方向 BFS は最短を返し続けるが、DFS と右手法は�
 最短である必要はない。BFS の経路の長さと比べれば、どれだけ遠回りしたかが分かる。
 
 ポインターの位置からセルへの換算は、描画と同じ `measure()`（`renderer.ts`）を通すので、描いた
-迷路と判定がずれることはない。`MazeCanvas.svelte` は前回のイベントからの移動を 1/4 セル刻みで
+迷路と判定がずれることはない。`maze-canvas.ts` は前回のイベントからの移動を 1/4 セル刻みで
 たどり、通過したセルを順に渡す。
 
 `solvers/index.ts` の一覧では「自分で解く」を先頭に置いているが、最初に選ばれているのは DFS の
@@ -293,8 +344,9 @@ export const SETTINGS = {
 } satisfies SettingsSchema
 ```
 
-型 `Settings` はこの表から導出されるので、1 行足せば App 側の型もそのぶん増える。スライダーの
-`min` / `max` も同じ `COLS` / `ROWS` / `BRAID` を読むため、UI が受け付ける値と保存時に通る値がずれない。
+型 `Settings` はこの表から導出されるので、1 行足せば画面側の型もそのぶん増える。スライダーの
+`min` / `max` も同じ `COLS` / `ROWS` / `BRAID` をフォームのスキーマで読むため、UI が受け付ける値と
+保存時に通る値がずれない。
 保存も復元もこの一覧を回るだけで、項目名を書いた場所は他にない。
 
 **項目ごとに読む。** 保存された JSON は「信用できない `unknown` の袋」として扱い、項目ごとに検証を
@@ -321,7 +373,9 @@ localStorage に既定値を焼き付けると、あとで既定値を変えて�
 ### 設定を足す
 
 1. `settings/schema.ts` の `SETTINGS` に 1 行足す
-2. `App.svelte` に `settings.<新しい項目>` を読み書きするコントロールを置く
+2. `settings-panel.html` に `[formField]="form.<新しい項目>"` のコントロールを置く
+   （範囲や無効にする条件があれば `settings-panel.ts` の `form()` のスキーマに書く）
+3. 変わったときに迷路や探索が応じる必要があれば、`maze-session.ts` のコンストラクタに `onChange` を足す
 
 生成・探索の手法を足したときは、id の一覧をレジストリから作っているので `settings/` は触らなくてよい。
 
@@ -329,15 +383,27 @@ localStorage に既定値を焼き付けると、あとで既定値を変えて�
 
 ```
 src/
-  App.svelte              UI と再生ループ（rAF）
-  lib/
-    MazeCanvas.svelte     canvas のサイズ追従と再描画、なぞる操作の受け口
+  index.html
+  main.ts                 bootstrapApplication（zone.js なし）
+  styles.css              色のトークンと全体の下地
+  test-setup.ts           fast-check のシード固定（ng test の setupFiles）
+  app/                    画面（Angular）
+    app.ts / .html / .css 画面の骨組み、生成と探索のボタン、G / S のショートカット
+    app.config.ts         アプリ全体のプロバイダ
+    maze-session.ts       迷路と探索の状態（signals）と再生ループ（rAF）、設定の変化への反応
+    settings-store.ts     設定の signal、localStorage への書き戻し
+    maze-canvas/          canvas のサイズ追従と再描画、なぞる操作の受け口
+    settings-panel/       設定パネル（Signal Forms）
+    status-board/         進み具合と、調べたセル・経路の長さ
+    maze-legend/          凡例
+    *.spec.ts             TestBed によるテスト
+  lib/                    迷路のロジック（フレームワークに依存しない）
     speeds.ts             再生速度の一覧（レジストリ）
     settings/
       fields.ts           設定 1 項目の型と、検証つきの項目ヘルパ
       schema.ts           保存する設定の一覧（ここに 1 行足すだけ）
       storage.ts          localStorage への読み書き（項目ごとに検証して復元）
-      settings.test.ts    テスト
+      settings.spec.ts    テスト
     maze/
       types.ts            Grid / MazeContext / SolveContext と 2 つのアルゴリズム型
       grid.ts             セル・方向・リンク操作、S と G の置き方、探索用の近傍と経路復元
@@ -345,7 +411,7 @@ src/
       rng.ts              mulberry32（シードを固定すれば同じ迷路になる）
       braid.ts            行き止まりを開けて輪を作る後処理（生成のうしろに繋ぐ）
       trace.ts            自分で解く: なぞった線を SolveContext に書き込む
-      *.test.ts           テスト。fast-check で入力を振り、不変条件を検査する
+      *.spec.ts           テスト。fast-check で入力を振り、不変条件を検査する
       test-utils.ts       テスト用のヘルパ（完全迷路の判定・経路の検証・ステップ上限）
       renderer.ts         Canvas 2D への描画（生成と探索を重ねて描く）
       algorithms/         生成

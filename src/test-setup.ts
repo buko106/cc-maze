@@ -13,6 +13,6 @@ import fc from 'fast-check'
  * fast-check prints the seed and the shrunk counterexample of a failing run, so
  * whatever that turns up can be pinned here or kept as a plain regression test.
  */
-const seed = process.env.FC_SEED ? Number(process.env.FC_SEED) : 20260905
+const seed = process.env['FC_SEED'] ? Number(process.env['FC_SEED']) : 20260905
 
 fc.configureGlobal({ seed, numRuns: 30 })

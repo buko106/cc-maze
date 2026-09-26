@@ -17,7 +17,7 @@ import {
 } from './storage'
 
 /**
- * A stand-in for localStorage, which the node test environment does not have.
+ * A stand-in for localStorage, so no test reads or writes the real one.
  * `fail` makes it behave like storage that has been turned off or filled up.
  */
 function fakeStorage(initial?: string, fail = false): StorageLike & { value: string | null } {
@@ -226,6 +226,7 @@ describe('loadSettings and saveSettings', () => {
   })
 
   it('fall back to the defaults where there is no storage at all', () => {
+    vi.stubGlobal('localStorage', undefined)
     expect(loadSettings()).toEqual(readSettings(SETTINGS, null))
     expect(() => saveSettings(loadSettings())).not.toThrow()
   })
