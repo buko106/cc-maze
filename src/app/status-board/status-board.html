@@ -1,0 +1,19 @@
+@let progress = session.progress();
+@let deadEnds = session.deadEnds();
+<dl>
+  <dt>生成</dt>
+  <dd>{{ status() }} / {{ session.steps() | number }} ステップ</dd>
+  <dt>行き止まり</dt>
+  <dd>{{ deadEnds === null ? '—' : (deadEnds | number) }}</dd>
+  <dt>探索</dt>
+  <dd>{{ solveStatus() }} / {{ session.solveSteps() | number }} ステップ</dd>
+  <dt>調べたセル</dt>
+  <dd>
+    {{ progress.expanded | number }} / {{ cellCount() | number }}
+    @if (progress.expanded > 0) {
+      <span class="ratio">({{ ratio() }}%)</span>
+    }
+  </dd>
+  <dt>経路の長さ</dt>
+  <dd>{{ progress.routeLength > 0 ? (progress.routeLength | number) : '—' }}</dd>
+</dl>

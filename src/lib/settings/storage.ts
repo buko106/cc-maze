@@ -46,8 +46,9 @@ function readValues(storage: StorageLike | null): Record<string, unknown> {
     return {}
   }
   const payload: Record<string, unknown> =
-    isRecord(parsed) && parsed.version === SETTINGS_VERSION ? parsed : {}
-  return isRecord(payload.values) ? payload.values : {}
+    isRecord(parsed) && parsed['version'] === SETTINGS_VERSION ? parsed : {}
+  const values = payload['values']
+  return isRecord(values) ? values : {}
 }
 
 /**
@@ -72,9 +73,7 @@ export function writeSettings<S extends SettingsSchema>(
   settings: SettingsOf<S>,
   storage: StorageLike | null,
 ): void {
-  // Copied out field by field, both to leave behind anything the schema does not
-  // know about and so that a caller holding these in a reactive proxy touches
-  // every field it has -- including the ones added after this was written
+  // Copied out field by field, to leave behind anything the schema does not know about
   const values: Record<string, unknown> = {}
   for (const key of Object.keys(schema) as (keyof S & string)[]) values[key] = settings[key]
   const payload: Payload = { version: SETTINGS_VERSION, values }
@@ -86,7 +85,7 @@ export function writeSettings<S extends SettingsSchema>(
   }
 }
 
-/** Missing under the tests' node environment, and throws where storage is blocked. */
+/** Missing outside a browser, and throws where storage is blocked. */
 function browserStorage(): StorageLike | null {
   try {
     return typeof localStorage === 'undefined' ? null : localStorage

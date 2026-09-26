@@ -4,12 +4,12 @@ pre-commit:
   parallel: false
   jobs:
     - name: prettier
-      glob: '*.{js,ts,svelte,css,json,md,html,yml,yaml}'
+      glob: '*.{js,ts,css,json,md,html,yml,yaml}'
       run: npx prettier --write --ignore-unknown {staged_files}
       stage_fixed: true
 
     - name: eslint
-      glob: '*.{js,ts,svelte}'
+      glob: '*.{js,ts,html}'
       run: npx eslint --fix --no-warn-ignored {staged_files}
       stage_fixed: true
 

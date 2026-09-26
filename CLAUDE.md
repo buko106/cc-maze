@@ -8,7 +8,7 @@
 
 | 対象                                                       | 言語   |
 | ---------------------------------------------------------- | ------ |
-| コード内コメント（`.ts` / `.svelte` のコメント、JSDoc）    | 英語   |
+| コード内コメント（`.ts` / `.html` / `.css`、JSDoc）        | 英語   |
 | コミットメッセージ（type / scope / subject / body すべて） | 英語   |
 | UI に表示される文字列（アルゴリズム名・ラベル・凡例など）  | 日本語 |
 | ドキュメント（README.md / CLAUDE.md）                      | 日本語 |
@@ -26,3 +26,16 @@ feat(maze): draw start and goal markers
 fix(renderer): stop outer walls from being clipped in half
 chore: set up Prettier, ESLint and Lefthook
 ```
+
+## Angular の書き方
+
+Angular 22 の最新の書き方にそろえる。古い書き方を持ち込まないこと。
+
+- zone.js は使わない（zoneless）。変更検知のきっかけは signal とテンプレートのイベントだけ
+- コンポーネントは standalone。`standalone: true` も `changeDetection: OnPush` も既定なので書かない
+- 状態は `signal()` / `computed()`、DOM への書き込みは `afterRenderEffect()`、アプリ全体の状態は
+  `@Service()` のサービスに置き、`inject()` で受け取る
+- テンプレートは `@if` / `@for` / `@let` などの組み込み制御フロー。`ngClass` / `ngStyle` ではなく
+  `[class.x]` / `[style.x]`、`@HostListener` ではなくデコレータの `host`
+- フォームは Signal Forms（`@angular/forms/signals` の `form()` と `[formField]`）
+- 迷路のロジックは `src/lib/` に置き、Angular を import しない。画面は `src/app/`

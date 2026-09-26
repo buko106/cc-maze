@@ -1,0 +1,46 @@
+<!-- The maze comes first so that stacking it above the panel on a phone takes
+     no visual reordering, and the reading order still matches the screen -->
+<main class="stage">
+  <app-maze-canvas />
+</main>
+
+<aside class="panel">
+  <div class="panel-body">
+    <header>
+      <h1>迷路ジェネレーター</h1>
+      <p class="subtitle">迷路を作るところと、解くところを続けて眺める</p>
+    </header>
+    <app-settings-panel />
+    <app-status-board />
+    <app-maze-legend />
+  </div>
+
+  <div class="actions">
+    <div class="action-row">
+      <button type="button" class="primary" aria-keyshortcuts="G" (click)="session.togglePlay()">
+        {{ playLabel() }}<kbd>G</kbd>
+      </button>
+      <button type="button" [disabled]="session.runState() === 'idle'" (click)="session.reset()">
+        リセット
+      </button>
+    </div>
+    <div class="action-row">
+      <button
+        type="button"
+        class="primary"
+        aria-keyshortcuts="S"
+        [disabled]="!session.solvable()"
+        (click)="toggleSolve()"
+      >
+        {{ solveLabel() }}<kbd>S</kbd>
+      </button>
+      <button
+        type="button"
+        [disabled]="session.solveState() === 'idle'"
+        (click)="session.clearSolve()"
+      >
+        クリア
+      </button>
+    </div>
+  </div>
+</aside>

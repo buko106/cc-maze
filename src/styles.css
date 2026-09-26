@@ -41,7 +41,7 @@ select {
 
 html,
 body,
-#app {
+app-root {
   height: 100%;
 }
 

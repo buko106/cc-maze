@@ -1,0 +1,15 @@
+<canvas
+  #canvas
+  [class.traceable]="traceable()"
+  [attr.role]="traceable() ? 'application' : 'img'"
+  [attr.tabindex]="traceable() ? 0 : null"
+  [attr.aria-label]="
+    traceable() ? '迷路。S からなぞって G を目指す。矢印キーでも進める' : '生成された迷路'
+  "
+  (pointerdown)="penDown($event)"
+  (pointermove)="penMove($event)"
+  (pointerup)="penUp($event)"
+  (pointercancel)="penUp($event)"
+  (lostpointercapture)="penUp($event)"
+  (keydown)="keyDown($event)"
+></canvas>

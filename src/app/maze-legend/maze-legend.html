@@ -1,0 +1,11 @@
+@for (group of groups; track group.title) {
+  <p class="legend-title">{{ group.title }}</p>
+  <ul>
+    @for (item of group.items; track item.label) {
+      <li>
+        <span class="swatch" [style.background]="item.color"></span>
+        {{ item.label }}
+      </li>
+    }
+  </ul>
+}

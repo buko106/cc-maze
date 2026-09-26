@@ -9,10 +9,10 @@ import { choice, integer, type Range, type SettingsOf, type SettingsSchema } fro
  * cells about 10px across, too small to tell the search colours apart. Roughly
  * square, because the strip the maze is pinned into is about as wide as it is
  * tall -- a portrait maze would leave the sides empty.
- * The breakpoint has to stay in step with the one in App.svelte's stylesheet.
- * Guarded because the tests import this module without a DOM.
+ * The breakpoint has to stay in step with the one in app.css.
+ * Guarded because the tests import this module where there is no matchMedia.
  */
-const NARROW = typeof window !== 'undefined' && window.matchMedia('(max-width: 780px)').matches
+const NARROW = globalThis.matchMedia?.('(max-width: 780px)').matches ?? false
 
 /** Slider bounds. Shared with the sliders themselves, so the two cannot drift apart. */
 export const COLS: Range = { min: 5, max: 90 }

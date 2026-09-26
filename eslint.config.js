@@ -1,35 +1,41 @@
 import js from '@eslint/js'
+import angular from 'angular-eslint'
 import prettier from 'eslint-config-prettier'
-import svelte from 'eslint-plugin-svelte'
+import { defineConfig } from 'eslint/config'
 import globals from 'globals'
 import ts from 'typescript-eslint'
-import svelteConfig from './svelte.config.js'
 
-export default ts.config(
-  js.configs.recommended,
-  ...ts.configs.recommended,
-  ...svelte.configs.recommended,
-  // 整形は Prettier に任せるので、書式に関わるルールは無効化する
+export default defineConfig([
+  {
+    files: ['**/*.ts'],
+    extends: [js.configs.recommended, ts.configs.recommended, angular.configs.tsRecommended],
+    // Lints the inline templates too, with the template rules below
+    processor: angular.processInlineTemplates,
+    rules: {
+      '@angular-eslint/directive-selector': [
+        'error',
+        { type: 'attribute', prefix: 'app', style: 'camelCase' },
+      ],
+      '@angular-eslint/component-selector': [
+        'error',
+        { type: 'element', prefix: 'app', style: 'kebab-case' },
+      ],
+    },
+  },
+  {
+    // Templates are parsed in full, so a field only the markup reads is never
+    // reported as unused, and the accessibility rules see every element
+    files: ['**/*.html'],
+    extends: [angular.configs.templateRecommended, angular.configs.templateAccessibility],
+  },
+  {
+    files: ['**/*.js'],
+    extends: [js.configs.recommended],
+    languageOptions: { globals: globals.node },
+  },
+  // Formatting is left to Prettier, so the rules about layout are turned off
   prettier,
-  ...svelte.configs.prettier,
   {
-    languageOptions: {
-      globals: { ...globals.browser, ...globals.node },
-    },
+    ignores: ['dist/', '.angular/'],
   },
-  {
-    // svelte-eslint-parser はテンプレートまで解析する。
-    // lang="ts" を読ませるために TS パーサを内側に渡す。
-    files: ['**/*.svelte', '**/*.svelte.ts', '**/*.svelte.js'],
-    languageOptions: {
-      parserOptions: {
-        extraFileExtensions: ['.svelte'],
-        parser: ts.parser,
-        svelteConfig,
-      },
-    },
-  },
-  {
-    ignores: ['dist/'],
-  },
-)
+])

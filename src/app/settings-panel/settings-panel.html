@@ -1,0 +1,109 @@
+<fieldset>
+  <legend>生成アルゴリズム</legend>
+  <div class="algorithms">
+    @for (entry of algorithms; track entry.id) {
+      <label class="algorithm" [class.selected]="entry.id === settings().algorithmId">
+        <input type="radio" [value]="entry.id" [formField]="form.algorithmId" />
+        <span class="algorithm-name">{{ entry.name }}</span>
+        <span class="algorithm-description">{{ entry.description }}</span>
+      </label>
+    }
+  </div>
+</fieldset>
+
+<fieldset>
+  <legend>探索アルゴリズム</legend>
+  <div class="algorithms">
+    @for (entry of solvers; track entry.id) {
+      <label class="algorithm" [class.selected]="entry.id === settings().solverId">
+        <input type="radio" [value]="entry.id" [formField]="form.solverId" />
+        <span class="algorithm-name">{{ entry.name }}</span>
+        <span class="algorithm-description">{{ entry.description }}</span>
+      </label>
+    }
+  </div>
+  @if (braided()) {
+    <p class="hint">
+      ループがあるので 2 点を結ぶ道は何本もある。差が出るのは調べたセル数だけではなく、
+      <b>手法ごとに見つける経路そのものが変わる</b>。BFS・A*・双方向 BFS は必ず最短の道を返し、DFS
+      と右手法は先に行き当たった道を返す。
+    </p>
+  } @else {
+    <p class="hint">
+      完全迷路なので 2 点を結ぶ道は 1 本しかなく、どの手法でも同じ経路にたどり着く。差が出るのは
+      <b>そこへ行き着くまでに何セル調べたか</b>。
+    </p>
+  }
+  @if (braidNote(); as note) {
+    <p class="warning">{{ note }}</p>
+  }
+</fieldset>
+
+<fieldset>
+  <legend>サイズ</legend>
+  <label class="slider">
+    <span class="slider-label"
+      >横 <b>{{ settings().cols }}</b></span
+    >
+    <input type="range" [formField]="form.cols" />
+  </label>
+  <label class="slider">
+    <span class="slider-label"
+      >縦 <b>{{ settings().rows }}</b></span
+    >
+    <input type="range" [formField]="form.rows" />
+  </label>
+</fieldset>
+
+<fieldset>
+  <legend>スタートとゴール</legend>
+  <div class="segmented">
+    @for (option of placements; track option.id) {
+      <label [class.selected]="option.id === settings().placementId">
+        <input type="radio" [value]="option.id" [formField]="form.placementId" />
+        {{ option.name }}
+      </label>
+    }
+  </div>
+  <p class="hint">{{ placement().description }}</p>
+</fieldset>
+
+<fieldset>
+  <legend>ループ</legend>
+  <label class="slider">
+    <span class="slider-label"
+      >行き止まりをつぶす <b>{{ settings().braidPercent }}%</b></span
+    >
+    <input type="range" step="5" [formField]="form.braidPercent" />
+  </label>
+  <p class="hint">
+    掘り終えた迷路の行き止まりを開けて輪を作る。0% なら完全迷路のまま、100%
+    なら行き止まりがひとつも残らない。輪ができるほど、迷路を抜ける道は何本もできる。
+  </p>
+</fieldset>
+
+<fieldset>
+  <legend>速度</legend>
+  <div class="speed">
+    <span class="speed-label">生成</span>
+    <div class="segmented">
+      @for (option of speeds; track option.id) {
+        <label [class.selected]="option.id === settings().speedId">
+          <input type="radio" [value]="option.id" [formField]="form.speedId" />
+          {{ option.name }}
+        </label>
+      }
+    </div>
+  </div>
+  <div class="speed" [class.disabled]="byHand()">
+    <span class="speed-label">探索</span>
+    <div class="segmented">
+      @for (option of speeds; track option.id) {
+        <label [class.selected]="option.id === settings().solveSpeedId">
+          <input type="radio" [value]="option.id" [formField]="form.solveSpeedId" />
+          {{ option.name }}
+        </label>
+      }
+    </div>
+  </div>
+</fieldset>

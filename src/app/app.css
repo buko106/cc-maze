@@ -1,0 +1,179 @@
+:host {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  /* Without a fixed 1fr row, the panel's content height stretches the whole page */
+  grid-template-rows: minmax(0, 1fr);
+  height: 100%;
+  overflow: hidden;
+}
+
+.panel {
+  display: grid;
+  /* Only the body scrolls; the action row stays visible as a footer */
+  grid-template-rows: minmax(0, 1fr) auto;
+  grid-area: 1 / 1;
+  min-height: 0;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+}
+
+.panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 1.5rem 1.25rem;
+  overflow-y: auto;
+}
+
+h1 {
+  margin: 0;
+  font-size: 1.15rem;
+  letter-spacing: 0.02em;
+}
+
+.subtitle {
+  margin: 0.35rem 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.actions {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.9rem 1.25rem 1.1rem;
+  border-top: 1px solid var(--border);
+  /* The controls themselves opt out of double-tap zoom in styles.css; the bar
+     around them has to as well, or a tap landing in a gap revives the gesture */
+  touch-action: manipulation;
+}
+
+.action-row {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.4rem;
+}
+
+button {
+  padding: 0.55rem 0.3rem;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel-raised);
+  color: var(--text);
+  font: inherit;
+  /* Small enough that the longest label still fits on one line at 320px */
+  font-size: 0.76rem;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+
+button:hover:not(:disabled) {
+  border-color: #3a4356;
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+button.primary {
+  border-color: transparent;
+  background: var(--accent-strong);
+  color: #06121c;
+  font-weight: 700;
+}
+
+button.primary:hover {
+  background: var(--accent);
+}
+
+kbd {
+  margin-left: 0.4em;
+  padding: 0 0.3em;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  font: inherit;
+  font-size: 0.85em;
+  opacity: 0.6;
+}
+
+/* No keyboard to press them with on a touch screen */
+@media (hover: none) {
+  kbd {
+    display: none;
+  }
+}
+
+.stage {
+  grid-area: 1 / 2;
+  padding: 1.5rem;
+  min-width: 0;
+  min-height: 0;
+}
+
+/*
+ * Phone held upright. The maze is pinned to the top of the screen and the two
+ * action rows to the bottom, so the settings in between can be scrolled
+ * without ever losing sight of the maze or of the buttons that drive it.
+ * The breakpoint is shared with the settings panel's stylesheet and with the
+ * smaller default size in lib/settings/schema.ts.
+ */
+@media (max-width: 780px) {
+  /* Block flow rather than grid: a sticky grid item may only travel within its
+     own row, which here is exactly its own height, so it would never move. */
+  :host {
+    display: block;
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
+  }
+
+  .stage {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    /* dvh so the address bar sliding away does not resize the maze */
+    height: 42vh;
+    height: 42dvh;
+    min-height: 200px;
+    padding: 0.7rem;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .panel {
+    display: block;
+    border-right: none;
+  }
+
+  .panel-body {
+    /* Clear the fixed action bar, and the home indicator underneath it */
+    padding: 1.1rem 0.9rem calc(8.5rem + env(safe-area-inset-bottom));
+    overflow-y: visible;
+  }
+
+  .actions {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 3;
+    /* Wider than on a pointer, so a thumb aiming for 解く does not land on
+       生成し直す in the row above */
+    gap: 0.7rem;
+    padding: 0.6rem 0.9rem calc(0.6rem + env(safe-area-inset-bottom));
+    background: var(--panel);
+  }
+
+  /* 44px is about the smallest target a fingertip hits reliably */
+  button {
+    min-height: 44px;
+    font-size: 0.85rem;
+  }
+
+  h1 {
+    font-size: 1.05rem;
+  }
+}
