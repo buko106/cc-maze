@@ -354,6 +354,31 @@
     else start()
   }
 
+  /** Keyboard shortcuts for the two primary buttons, matched case-insensitively. */
+  const SHORTCUTS: Record<string, () => void> = {
+    g: togglePlay,
+    s: () => {
+      if (solvable) toggleSolve()
+    },
+  }
+
+  function shortcut(event: KeyboardEvent): void {
+    // Leave browser and OS shortcuts such as Ctrl+S alone, and ignore a held key
+    if (event.ctrlKey || event.metaKey || event.altKey || event.repeat) return
+    const target = event.target
+    if (
+      target instanceof HTMLElement &&
+      target.closest(
+        'input:not([type=radio]):not([type=range]), textarea, select, [contenteditable]',
+      )
+    )
+      return
+    const action = SHORTCUTS[event.key.toLowerCase()]
+    if (!action) return
+    event.preventDefault()
+    action()
+  }
+
   /** Change a setting and rebuild. If it was running, keep it running with the new setting. */
   function reconfigure(apply: () => void): void {
     const wasActive = runState === 'running' || runState === 'done'
@@ -381,6 +406,8 @@
     return () => cancelAnimationFrame(frame)
   })
 </script>
+
+<svelte:window onkeydown={shortcut} />
 
 <div class="app">
   <!-- The maze comes first so that stacking it above the panel on a phone takes
@@ -604,11 +631,15 @@
 
     <div class="actions">
       <div class="action-row">
-        <button class="primary" onclick={togglePlay}>{primaryLabel}</button>
+        <button class="primary" onclick={togglePlay} aria-keyshortcuts="G">
+          {primaryLabel}<kbd>G</kbd>
+        </button>
         <button onclick={reset} disabled={runState === 'idle'}>リセット</button>
       </div>
       <div class="action-row">
-        <button class="primary" onclick={toggleSolve} disabled={!solvable}>{solveLabel}</button>
+        <button class="primary" onclick={toggleSolve} disabled={!solvable} aria-keyshortcuts="S">
+          {solveLabel}<kbd>S</kbd>
+        </button>
         <button onclick={clearSolve} disabled={solveState === 'idle'}>クリア</button>
       </div>
     </div>
@@ -888,6 +919,23 @@
 
   button.primary:hover {
     background: var(--accent);
+  }
+
+  kbd {
+    margin-left: 0.4em;
+    padding: 0 0.3em;
+    border: 1px solid currentColor;
+    border-radius: 3px;
+    font: inherit;
+    font-size: 0.85em;
+    opacity: 0.6;
+  }
+
+  /* No keyboard to press them with on a touch screen */
+  @media (hover: none) {
+    kbd {
+      display: none;
+    }
   }
 
   .status {
