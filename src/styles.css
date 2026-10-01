@@ -26,17 +26,15 @@
 }
 
 /*
- * Two taps in quick succession on controls sitting close together -- 生成する
- * then 解く, or one button twice -- are read as a double tap on phones and
- * tablets, which zooms the page instead of pressing the buttons.
- * "manipulation" drops the double-tap-to-zoom gesture for touches that start on
- * a control; scrolling and pinch zoom keep working.
+ * The page never zooms. A double tap anywhere -- on the buttons, the maze or the
+ * gaps between them -- and a pinch both scale the page on phones and tablets,
+ * which throws the layout off while the user is just pressing 生成する then 解く.
+ * "pan-x pan-y" leaves scrolling and drops every zoom gesture. It is set on every
+ * element because a touch only inherits the restriction up to its nearest scroll
+ * container; the viewport meta tag in index.html covers browsers that ignore it.
  */
-button,
-label,
-input,
-select {
-  touch-action: manipulation;
+* {
+  touch-action: pan-x pan-y;
 }
 
 html,

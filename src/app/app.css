@@ -42,9 +42,6 @@ h1 {
   gap: 0.45rem;
   padding: 0.9rem 1.25rem 1.1rem;
   border-top: 1px solid var(--border);
-  /* The controls themselves opt out of double-tap zoom in styles.css; the bar
-     around them has to as well, or a tap landing in a gap revives the gesture */
-  touch-action: manipulation;
 }
 
 .action-row {
