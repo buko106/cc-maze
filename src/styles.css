@@ -37,6 +37,24 @@
   touch-action: pan-x pan-y;
 }
 
+/*
+ * Nothing on the page is meant to be copied, and a drag or a long press that
+ * starts a text selection steals the gesture from the controls and the maze.
+ * Text fields are excluded: iOS Safari refuses to focus an input that has
+ * user-select: none.
+ */
+* {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+input,
+textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 html,
 body,
 app-root {
