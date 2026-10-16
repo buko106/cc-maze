@@ -3,7 +3,7 @@
 迷路を作るところと、解くところをそのまま眺められる WEB アプリ。Angular 22（standalone コンポーネント・
 signals・Signal Forms・zoneless）+ TypeScript。
 
-**公開先: https://www.buko106.tokyo/cc-maze/**（`main` への push で GitHub Pages へ自動デプロイ）
+**公開先: [https://www.buko106.tokyo/cc-maze/](https://www.buko106.tokyo/cc-maze/)** (`main` への push で GitHub Pages へ自動デプロイ)
 
 - **生成**: 再帰的バックトラッカー / Kruskal 法 / Prim 法 / 再帰分割 / Wilson 法 / Eller 法
 - **探索**: 深さ優先探索 (DFS) / 幅優先探索 (BFS) / A\* / 双方向 BFS / 右手法（壁伝い） / 行き止まり埋め
